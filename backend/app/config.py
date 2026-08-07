@@ -1,0 +1,60 @@
+from __future__ import annotations
+
+import logging
+import json
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE_ROOT = ROOT.parent
+SKILLS_DIR = WORKSPACE_ROOT / "skills"
+DATA_DIR = ROOT / "data"
+CUSTOM_AGENTS_DIR = DATA_DIR / "custom_agents"
+SESSIONS_DIR = DATA_DIR / "sessions"
+CONFIG_DIR = ROOT / "config"
+LOG_DIR = ROOT / "log"
+RULES_PATH = CONFIG_DIR / "RULES.md"
+MODELS_PATH = CONFIG_DIR / "models.json"
+API_CONFIG_PATH = CONFIG_DIR / "api_config.json"
+LOG_PATH = LOG_DIR / "serve_philosopher_agent_web.log"
+
+MAX_DOC_BYTES = 200 * 1024
+MAX_ROUNDS = 10
+MAX_READ_DOCS_PER_TURN = 3
+DEFAULT_MODEL_ID = "mock-philosopher"
+
+DEFAULT_SKILL_AGENTS = [
+    {"agent_id": "aristotle", "skill_dir": "aristotle-agent", "display_name": "亚里士多德"},
+    {"agent_id": "schopenhauer", "skill_dir": "schopenhauer-agent", "display_name": "叔本华"},
+    {"agent_id": "zhuangzi", "skill_dir": "zhuangzi-agent", "display_name": "庄子"},
+    {"agent_id": "hanfeizi", "skill_dir": "hanfeizi-agent", "display_name": "韩非子"},
+]
+
+
+def ensure_directories() -> None:
+    for path in [DATA_DIR, CUSTOM_AGENTS_DIR, SESSIONS_DIR, CONFIG_DIR, LOG_DIR]:
+        path.mkdir(parents=True, exist_ok=True)
+
+
+def setup_logging() -> None:
+    ensure_directories()
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    if any(isinstance(handler, logging.FileHandler) and handler.baseFilename == str(LOG_PATH) for handler in root_logger.handlers):
+        return
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
+    file_handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
+
+def load_api_config() -> dict[str, str]:
+    if not API_CONFIG_PATH.exists():
+        return {}
+    try:
+        data = json.loads(API_CONFIG_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"API config file is invalid: {API_CONFIG_PATH}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"API config must be a JSON object: {API_CONFIG_PATH}")
+    return {key: str(value).strip() for key, value in data.items() if value is not None}

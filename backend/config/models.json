@@ -1,0 +1,22 @@
+{
+  "models": [
+    {
+      "id": "mock-philosopher",
+      "provider": "mock",
+      "model": "mock-philosopher",
+      "api_base": null,
+      "api_key_env": null,
+      "temperature": 0.7,
+      "max_tokens": 800
+    },
+    {
+      "id": "openai-compatible-default",
+      "provider": "openai_compatible",
+      "model": "deepseek-v4-flash",
+      "api_base": "https://api.openai.com/v1",
+      "api_key_env": "OPENAI_API_KEY",
+      "temperature": 0.7,
+      "max_tokens": 800
+    }
+  ]
+}

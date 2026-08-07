@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>论语圆桌 · 星空圆桌</title>
+<style>
+:root{--bg:#0a0e17;--panel:#1a2030;--panel2:#232a3d;--ink:#e8edf5;--muted:#8a93aa;--blue:#5b8dff;--green:#54d49c;--line:#2c3550;--gold:#d9ae58}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif;overflow:hidden}
+body::before{content:'';position:fixed;inset:0;z-index:-1;background:radial-gradient(1px 1px at 10% 20%,rgba(255,255,255,.6),transparent),radial-gradient(1px 1px at 30% 60%,rgba(255,255,255,.5),transparent),radial-gradient(1.5px 1.5px at 50% 10%,rgba(255,255,255,.7),transparent),radial-gradient(1px 1px at 70% 40%,rgba(255,255,255,.4),transparent),radial-gradient(1px 1px at 90% 80%,rgba(255,255,255,.6),transparent),radial-gradient(1.5px 1.5px at 15% 85%,rgba(255,255,255,.5),transparent),radial-gradient(1px 1px at 45% 35%,rgba(255,255,255,.3),transparent),radial-gradient(1px 1px at 80% 15%,rgba(255,255,255,.7),transparent),radial-gradient(1.5px 1.5px at 25% 45%,rgba(255,255,255,.4),transparent),radial-gradient(1px 1px at 65% 70%,rgba(255,255,255,.5),transparent),radial-gradient(1px 1px at 35% 90%,rgba(255,255,255,.3),transparent),radial-gradient(1.5px 1.5px at 55% 55%,rgba(255,255,255,.6),transparent),radial-gradient(1px 1px at 75% 30%,rgba(255,255,255,.4),transparent),radial-gradient(1px 1px at 95% 95%,rgba(255,255,255,.5),transparent),radial-gradient(1px 1px at 5% 50%,rgba(255,255,255,.3),transparent);animation:twinkle 4s ease-in-out infinite alternate}
+@keyframes twinkle{0%{opacity:.7}100%{opacity:1}}
+.app{height:100vh;display:flex;flex-direction:column}
+.content{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 315px;grid-template-rows:1fr auto;gap:16px;padding:18px 22px 100px}
+.stage{min-width:0;min-height:0;display:flex;flex-direction:column;grid-column:1;grid-row:1 / span 2}
+.side{min-height:0;background:rgba(26,32,48,.85);border:1px solid var(--line);border-radius:13px;display:flex;flex-direction:column;overflow:hidden;backdrop-filter:blur(4px);grid-column:2;grid-row:1}
+.end-call{grid-column:2;grid-row:2;height:48px;display:flex;align-items:center;justify-content:center;background:rgba(10,14,23,.92);border:1px solid var(--line);border-radius:13px;backdrop-filter:blur(4px);gap:6px}
+.end-call button{background:#d94f59;color:#fff;border:0;border-radius:10px;padding:8px 20px;font-size:13px;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .2s}.end-call button:hover{background:#c04852}
+.story-strip{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:6px}
+.story-strip h1{font-size:22px;margin:0;color:var(--gold)}.story-strip p{color:var(--muted);margin:3px 0 0}
+.story-progress{display:flex;align-items:center;gap:6px;color:var(--muted);font-weight:700}.story-progress .bar{display:flex;gap:3px}.story-progress .dot{width:10px;height:10px;border-radius:50%;background:#2c3550;transition:all .3s}.story-progress .dot.done{background:var(--gold);box-shadow:0 0 6px rgba(217,174,88,.5)}.story-progress .dot.current{background:var(--blue);box-shadow:0 0 8px rgba(91,141,255,.6)}.story-progress .dot.pending{background:#2c3550}
+.tile{position:relative;overflow:hidden;border-radius:12px;background:rgba(26,32,48,.85);border:2px solid transparent;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);transition:border-color .3s,box-shadow .3s,transform .3s}.tile.speaking{border-color:var(--blue);box-shadow:0 0 12px rgba(91,141,255,.25);transform:scale(1.02)}
+.tile-head{position:absolute;left:13px;top:11px;display:flex;gap:8px;align-items:center}.tile-avatar{width:32px;height:32px;border-radius:9px;display:grid;place-items:center;font-size:20px;transition:transform .3s}.tile.speaking .tile-avatar{transform:scale(1.15)}
+.tile-name{font-weight:700;text-shadow:0 1px 3px #000}.tile-role{color:var(--muted);font-size:11px;margin-left:3px}
+.tile-face{filter:drop-shadow(0 7px 5px rgba(0,0,0,.17));transition:transform .3s}.tile.speaking .tile-face{transform:scale(1.12)}
+.tile-status{position:absolute;right:12px;bottom:10px;background:rgba(0,0,0,.45);border-radius:7px;padding:3px 7px;color:#dbe2ec;font-size:12px;white-space:nowrap}
+.tile-caption{position:absolute;left:13px;right:13px;bottom:10px;background:rgba(10,12,16,.72);border-radius:8px;padding:7px 9px;color:#f7f9fc;display:none}.tile.speaking .tile-caption{display:block}
+.tile-copy{position:absolute;left:13px;right:13px;bottom:42px;background:rgba(8,13,23,.82);border-radius:8px;padding:7px 9px;font-size:12px;color:#f7f9fc;transition:opacity .3s}
+.side-tabs{height:50px;display:flex;border-bottom:1px solid var(--line)}.side-tabs button{flex:1;background:transparent;color:var(--muted);border-bottom:2px solid transparent;border-top:0;border-left:0;border-right:0;font:inherit;cursor:pointer}.side-tabs button.active{color:#fff;border-color:var(--blue)}
+.side-body{padding:15px;flex:1;overflow:auto;min-height:0}
+.story-box{background:var(--panel2);border-radius:10px;padding:13px;margin-bottom:15px}.story-box h2{font-size:15px;margin:0 0 7px;color:var(--gold)}.story-box p{color:var(--muted);margin:0;font-size:13px}
+.chat-title{display:flex;justify-content:space-between;align-items:center;color:#fff;font-weight:700;margin:12px 0}.chat-title span{font-size:11px;color:var(--muted);font-weight:400}
+.chat{display:grid;gap:12px;max-height:calc(100vh - 380px);overflow-y:auto}.chat-msg{display:flex;gap:8px;animation:fadeIn .3s ease}@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.chat-avatar{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:#47505e;flex:none}.chat-msg p{margin:0;background:#2c323b;padding:7px 9px;border-radius:0 9px 9px 9px;color:#dce2eb;font-size:13px;max-width:260px}.chat-msg b{display:block;color:#fff;font-size:11px;margin-bottom:2px}
+.finish{position:fixed;inset:0;background:rgba(7,9,13,.76);display:none;place-items:center;z-index:99}.finish.show{display:grid}.finish-card{width:min(450px,calc(100% - 32px));background:rgba(244,235,208,.95);color:#3d3222;border-radius:18px;padding:30px;text-align:center;backdrop-filter:blur(8px)}.finish-card .star{font-size:42px;color:#e7ad32}.finish-card h2{margin:7px 0}.finish-card .match{font-size:24px;font-weight:900;color:#4d719f}.finish-card p{color:#66738a}.finish-card button{background:#4d719f;color:#fff;border:0;border-radius:9px;padding:10px 18px;font-weight:700;cursor:pointer;margin:4px}.finish-card button.again{background:#3a404b;color:#e8edf5}
+</style>
+<style>
+.bottom-bar{position:fixed;left:22px;right:353px;bottom:0;z-index:20;border-radius:14px;overflow:hidden;box-shadow:0 -4px 20px rgba(0,0,0,.4)}
+.user-panel{display:flex;flex-direction:column;gap:6px;padding:10px 16px;background:rgba(26,32,48,.92);border:1px solid var(--line);border-radius:14px;backdrop-filter:blur(4px)}
+.user-panel-top{display:flex;align-items:center;gap:8px}
+.user-panel-top strong{font-size:14px;color:#f5f7fb;white-space:nowrap}
+.user-panel .suggestions{display:flex;gap:6px;flex:1;min-width:0}
+.suggestion{flex:1;text-align:left;background:rgba(35,42,61,.8);color:#dce2eb;border:1px solid var(--line);border-radius:9px;padding:5px 10px;font-size:12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:background .2s}.suggestion:hover{background:rgba(56,63,75,.8)}
+.user-panel-bottom{display:flex;align-items:center;gap:10px}
+.user-panel textarea{flex:1;height:42px;min-height:42px;max-height:42px;resize:none;padding:8px 10px;background:var(--bg);color:#f5f7fb;border:1px solid var(--line);border-radius:9px;outline:0;font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC",sans-serif}
+.user-actions{display:flex;gap:6px;flex:none;white-space:nowrap}
+.user-actions button{border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;border:0}
+.skip{background:rgba(45,50,59,.8);color:var(--muted)}.send{background:var(--blue);color:#fff;font-weight:700}
+.loading{background:rgba(45,50,59,.8);color:var(--muted);cursor:default!important}
+.video-grid{flex:1;min-height:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:minmax(0,2fr) minmax(0,1fr);gap:10px}
+.video-grid .tile.host{grid-column:1 / span 5;grid-row:1;align-self:stretch}
+.video-grid .tile:nth-child(2){grid-column:1;grid-row:2}
+.video-grid .tile:nth-child(3){grid-column:2;grid-row:2}
+.video-grid .tile:nth-child(4){grid-column:3;grid-row:2}
+.video-grid .tile:nth-child(5){grid-column:4;grid-row:2}
+.video-grid .tile.player{grid-column:5;grid-row:2;align-self:stretch;background:rgba(35,50,80,.75);border-color:rgba(91,141,255,.3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:4px}
+.video-grid .tile.player .tile-face{font-size:clamp(28px,3.5vw,48px)}.video-grid .tile.player .tile-copy{position:static;background:transparent;padding:0;font-size:12px;color:var(--muted);text-align:center}.video-grid .tile.player .tile-status{position:static;background:rgba(0,0,0,.3);margin-top:2px}
+.video-grid .tile.host{background:rgba(244,235,208,.92);border:1px solid #b99b62;box-shadow:inset 0 0 0 6px #eadbb7,inset 0 0 0 8px #c9a86b;color:#3d3021;backdrop-filter:blur(4px)}
+.video-grid .tile.host .tile-head{z-index:3;color:#3d3021;text-shadow:none;left:18px;top:16px}
+.video-grid .tile.host .tile-avatar{background:#d9ae58}.video-grid .tile.host .tile-role{color:#806b4b}
+.video-grid .tile.host .tile-status{z-index:3;background:rgba(92,68,31,.12);color:#6d5631;right:18px;bottom:16px}
+.video-grid .tile.host .tile-caption{display:block;position:absolute;inset:0;overflow:auto;background:transparent;border:0;box-shadow:none;border-radius:0;padding:60px 10% 34px;color:#3d3021;text-align:center}
+.video-grid .tile.host .screen-label{color:#97742e;border-bottom:1px solid #c9a86b;padding-bottom:7px;font-size:11px;font-weight:700;letter-spacing:.08em}
+.video-grid .tile.host .screen-title{font-family:Georgia,"Songti SC",serif;font-size:clamp(20px,2.8vw,34px);color:#392b1c;margin:8px 0 2px}
+.video-grid .tile.host .screen-source{color:#806b4b;font-size:11px}
+.video-grid .tile.host .screen-original{font-family:Georgia,"Songti SC",serif;font-size:clamp(16px,2vw,26px);line-height:2;color:#3d3021;border-left:0;border-top:1px solid #c9a86b;border-bottom:1px solid #c9a86b;padding:12px 4px;margin:16px 0}
+.video-grid .tile.host .screen-story{color:#67553a;font-size:13px;line-height:1.8;text-align:left}
+.video-grid .tile:not(.host):not(.player) .tile-face{font-size:clamp(34px,4.5vw,60px)}
+.video-grid .tile:not(.host):not(.player) .tile-copy{font-size:11px;max-height:44px}
+@media(max-width:900px){.bottom-bar{left:12px;right:12px}.content{grid-template-columns:1fr;grid-template-rows:1fr auto auto}.side{display:none}.end-call{grid-column:1;grid-row:3}}
+@media(max-width:650px){.bottom-bar{left:8px;right:8px}.content{padding:12px 8px 100px}.video-grid{grid-template-columns:1fr;grid-template-rows:minmax(200px,auto) repeat(4,minmax(70px,auto)) 44px}.video-grid .tile.host,.video-grid .tile:nth-child(2),.video-grid .tile:nth-child(3),.video-grid .tile:nth-child(4),.video-grid .tile:nth-child(5){grid-column:1;grid-row:auto}.video-grid .tile.host{aspect-ratio:16/9}.video-grid .tile.player{grid-column:1;grid-row:6;aspect-ratio:auto;height:44px}.user-panel .suggestions{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="content">
+    <main class="stage">
+      <div class="story-strip">
+        <div>
+          <h1 id="title">正在加载...</h1>
+          <p id="source">连接服务器中</p>
+        </div>
+        <div class="story-progress" id="progressDisplay">
+          <div class="bar" id="progressBar"></div>
+          <span><b id="num">--</b> / 10</span>
+        </div>
+      </div>
+      <div class="video-grid" id="grid"></div>
+    </main>
+    <aside class="side">
+      <div class="side-tabs">
+        <button class="active">聊天</button>
+        <button onclick="alert('参与者：主持人、亚里士多德、庄子、韩非子、叔本华、你')">参与者</button>
+      </div>
+      <div class="side-body">
+        <div class="story-box">
+          <h2 id="side-title">主持人提示</h2>
+          <p id="story">故事加载中...</p>
+        </div>
+        <div class="chat-title">会议聊天 <span>实时字幕</span></div>
+        <div class="chat" id="chat"></div>
+      </div>
+    </aside>
+    <div class="end-call">
+      <button onclick="finish()"><span>☎</span> 结束会议</button>
+    </div>
+  </div>
+  <div class="bottom-bar">
+    <div class="user-panel" id="user-panel">
+      <div class="user-panel-top">
+        <strong>你的观点</strong>
+        <div class="suggestions" id="suggestions"></div>
+      </div>
+      <div class="user-panel-bottom">
+        <textarea id="input" maxlength="120" disabled placeholder="等待哲学家发言中..."></textarea>
+        <div class="user-actions">
+          <button class="skip loading" id="skipBtn" disabled>跳过</button>
+          <button class="send loading" id="sendBtn" disabled>发送</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="finish" id="finish">
+    <div class="finish-card">
+      <div class="star">✦</div>
+      <h2>会议已结束</h2>
+      <div class="match" id="resultMatch">你最接近：庄子</div>
+      <p id="resultDesc">你习惯从既定答案之外重新看问题，也愿意为不确定性留下空间。</p>
+      <button onclick="restart()">重新开始</button>
+      <button class="again" onclick="finishRestart()">再来一次</button>
+    </div>
+  </div>
+</div>
+<script>
+const data=[
+['亲亲相隐','《论语·子路》','叶公对孔子说：我们那里有个正直的人，父亲偷了羊，儿子去告发。孔子说：我们这里正直的人不同——父为子隐，子为父隐，正直就在其中。','叶公语孔子曰：“吾党有直躬者，其父攘羊，而子证之。”孔子曰：“吾党之直者异于是：父为子隐，子为父隐，直在其中矣。”'],
+['杀身成仁','《论语·卫灵公》','孔子说：志士仁人，不会为了活命而损害仁，只会牺牲生命来成全仁。','子曰：“志士仁人，无求生以害仁，有杀身以成仁。”'],
+['以德报怨','《论语·宪问》','有人问：用恩德回报怨恨怎么样？孔子反问：那用什么来回报恩德？应该用正直回报怨恨，用恩德回报恩德。','或曰：“以德报怨，何如？”子曰：“何以报德？以直报怨，以德报德。”'],
+['民可使由之','《论语·泰伯》','孔子说：对于百姓，可以使他们照着我们的道路走去，不可以使他们知道那是为什么。','子曰：“民可使由之，不可使知之。”'],
+['唯女子与小人难养也','《论语·阳货》','孔子说：只有女子和小人是难以相处的，亲近了他们会放肆，疏远了他们又会怨恨。','子曰：“唯女子与小人难养也，近之则不孙，远之则怨。”'],
+['从来如此就对吗','《论语·先进》','子路问孔子：如果听到一件该做的事就马上去做吗？孔子说：有父兄在，怎么能听到就做？冉有问同样的问题，孔子却说：听到了就去做。公西华不解，孔子说：冉有退缩，所以推他一把；子路好勇，所以拉他回来。','子路问：“闻斯行诸？”子曰：“有父兄在，如之何其闻斯行之？”冉有问：“闻斯行诸？”子曰：“闻斯行之。”'],
+['夷狄之有君','《论语·八佾》','孔子说：夷狄（边远民族）虽然有君主，还不如中原各国没有君主呢。','子曰：“夷狄之有君，不如诸夏之亡也。”'],
+['仕而优则学','《论语·子张》','子夏说：做官了有余力就去学习，学习好了有余力就去做官。','子夏曰：“仕而优则学，学而优则仕。”'],
+['不孝有三无后为大','《孟子·离娄上》','孟子说：不孝顺的表现有三种，没有后代是最大的。舜没有告诉父母就娶妻，就是怕没有后代，君子认为这等于告诉了父母。','孟子曰：“不孝有三，无后为大。舜不告而娶，为无后也，君子以为犹告也。”'],
+['民为贵','《孟子·尽心下》','孟子说：百姓是最重要的，国家其次，君主最轻。得到百姓的拥护就能做天子，得到天子的信任就能做诸侯，得到诸侯的信任就能做大夫。','孟子曰：“民为贵，社稷次之，君为轻。”']
+];
+
+const systemPrompts=[
+'讨论焦点：亲情与正义的冲突。亲亲相隐是否合理？家庭伦理能否凌驾于法律之上？',
+'讨论焦点：价值与生命的权衡。有没有比生命更重要的东西？为信念牺牲是否值得？',
+'讨论焦点：公平与善意的边界。以德报怨是否纵容恶？以直报怨是否过于冷酷？',
+'讨论焦点：权力与知识的分配。百姓是否应该被告知决策的理由？精英主义是否合理？',
+'讨论焦点：性别与权力。这句话是否反映了性别偏见？如何理解历史语境下的性别观念？',
+'讨论焦点：因材施教与公平。同样的道理，对不同的人是否应该有不同的回答？教育公平意味着什么？',
+'讨论焦点：文明与野蛮的划分。有没有文化优越性？礼乐制度是否真的高于一切？',
+'讨论焦点：理论与实践的关系。学习与做官孰先孰后？知识是否应该服务于现实？',
+'讨论焦点：传统与现代的冲突。无后是否真的不孝？个人选择与家庭期待如何平衡？',
+'讨论焦点：民主与民本。民贵君轻与现代民主是否一致？人民的主体地位意味着什么？'
+];
+
+const suggestionsList=[
+['亲情应该优先于法律。','社会公义比家庭私情更重要。','两者之间不存在绝对的对错。'],
+['生命是最高价值，不值得为信念牺牲。','没有信念的人生不值得活。','困境在于，我们往往不知道什么值得牺牲。'],
+['以德报怨只会鼓励恶行。','正直比善意更重要。','以直报怨才是可持续的公平。'],
+['百姓应该被告知决策的理由。','有些复杂问题确实难以向所有人解释。','关键在于是否真正为百姓谋利。'],
+['这句话确实反映了时代局限。','不能脱离历史语境来评判。','经典也需要被批判性继承。'],
+['教育应当因人而异。','公平不等于同样对待。','关键在于了解每个学生的特点。'],
+['文明没有高低之分。','礼乐制度是文明进步的标志。','文化优越论本身就是危险的。'],
+['理论最终要服务于实践。','学习本身就值得追求，不一定要做官。','两者应该相互促进。'],
+['传统观念需要与时俱进。','家庭期待是合理的，但不应成为枷锁。','个人选择与家庭责任可以兼顾。'],
+['民贵君轻是古代思想的高峰。','与现代民主有本质不同。','人民的主体地位需要制度保障。']
+];
+
+let n=0;let sessionId=null;let history=[];let philosopherResponses=[];let waitingForUser=false;let gameRunning=false;let abortController=null;let agentNames={};let agentIds=[];let playerChoiceWeights={};const $=s=>document.querySelector(s);const $$=s=>document.querySelectorAll(s);
+
+async function fetchAgents(){
+  try{
+    let r=await fetch('/api/agents');let j=await r.json();
+    let wanted=['aristotle','zhuangzi','hanfeizi','schopenhauer'];
+    let found=[];
+    for(let id of wanted){
+      let a=(j.agents||[]).find(x=>x.agent_id===id);
+      if(a){found.push(a);agentNames[id]=a.display_name}
+    }
+    agentIds=found.map(x=>x.agent_id);
+    return found;
+  }catch(e){
+    agentIds=['aristotle','zhuangzi','hanfeizi','schopenhauer'];
+    agentNames={aristotle:'亚里士多德',zhuangzi:'庄子',hanfeizi:'韩非子',schopenhauer:'叔本华'};
+    return agentIds.map(id=>({agent_id:id,display_name:agentNames[id]}));
+  }
+}
+
+function renderStory(){
+  let s=data[n];$('#title').textContent=s[0];$('#source').textContent=s[1]+' · 圆桌讨论中';
+  $('#num').textContent=String(n+1).padStart(2,'0');$('#story').textContent=s[2];
+  updateProgress(n);
+}
+
+function updateProgress(idx){
+  let bar=$('#progressBar');bar.innerHTML='';
+  for(let i=0;i<10;i++){let d=document.createElement('span');d.className='dot'+(i<idx?' done':'')+(i===idx?' current':'');bar.appendChild(d)}
+}
+
+function renderTiles(speakingName=null,texts={}){
+  let s=data[n];let html='';
+  html+=`<div class="tile host"><div class="tile-head"><span class="tile-avatar">🎙️</span><div><strong>主持人</strong><span class="tile-role"> · 会议主持</span></div></div><div class="tile-caption"><div class="screen-label">SCREEN SHARING · 论语原文</div><div class="screen-title">${s[0]}</div><div class="screen-source">${s[1]}</div><div class="screen-original">${s[3]}</div><div class="screen-story">${s[2]}</div></div><div class="tile-status">● 正在发言</div></div>`;
+  let phils=['亚里士多德','庄子','韩非子','叔本华'];let emojis={'亚里士多德':'🧔','庄子':'🧑‍🎨','韩非子':'🧑‍⚖️','叔本华':'🧓'};
+  for(let name of phils){let isSpeaking=name===speakingName;let text=texts[name]||'等待发言';html+=`<div class="tile a ${isSpeaking?'speaking':''}"><div class="tile-head"><span class="tile-avatar">${emojis[name]}</span><div><strong>${name}</strong><span class="tile-role"> · 哲学家</span></div></div><div class="tile-face">${emojis[name]}</div><div class="tile-copy">${text}</div><div class="tile-status">${isSpeaking?'● 正在发言':'⌁ 静音'}</div></div>`;}
+  html+=`<div class="tile player"><div class="tile-face">🧑</div><div class="tile-copy">你 — ${waitingForUser?'轮到你了':'正在聆听'}</div><div class="tile-status">⌁ ${waitingForUser?'可发言':'已加入'}</div></div>`;
+  $('#grid').innerHTML=html;
+}
+
+function chat(name,msg){
+  let e={'主持人':'🎙️','亚里士多德':'🧔','庄子':'🧑‍🎨','韩非子':'🧑‍⚖️','叔本华':'🧓','你':'🧑'}[name]||'💬';
+  $('#chat').insertAdjacentHTML('beforeend',`<div class="chat-msg"><div class="chat-avatar">${e}</div><div><b>${name}</b><p>${msg}</p></div></div>`);
+  let c=document.querySelector('.chat');c.scrollTop=c.scrollHeight;
+}
+
+function setUserInputEnabled(enabled){
+  $('#input').disabled=!enabled;$('#input').placeholder=enabled?'写下你的想法，或选择参考观点':'等待哲学家发言中...';
+  $('#skipBtn').disabled=!enabled;$('#skipBtn').className='skip'+(enabled?'':' loading');
+  $('#sendBtn').disabled=!enabled;$('#sendBtn').className='send'+(enabled?'':' loading');
+}
+
+async function startSession(){
+  if(!gameRunning)return;
+  let s=data[n];let topic=s[0]+'：'+s[2];let sysPrompt=systemPrompts[n];
+  let req={topic:topic,agent_ids:agentIds,rounds:10,start_round:n+1,run_rounds:1,system_prompt:sysPrompt,history:history,mode:'roundtable'};
+  if(sessionId)req.session_id=sessionId;
+  waitingForUser=false;setUserInputEnabled(false);philosopherResponses=[];
+  abortController=new AbortController();
+  try{
+    let resp=await fetch('/api/sessions/stream',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(req),signal:abortController.signal});
+    if(!resp.ok){fallbackRound();return;}
+    let reader=resp.body.getReader();let decoder=new TextDecoder();let buffer='';
+    while(true){
+      let {done,value}=await reader.read();
+      if(done)break;
+      buffer+=decoder.decode(value,{stream:true});
+      let lines=buffer.split('\n');buffer=lines.pop()||'';
+      let eventType='',eventData='';
+      for(let line of lines){
+        if(line.startsWith('event: '))eventType=line.slice(7).trim();
+        else if(line.startsWith('data: '))eventData=line.slice(6).trim();
+        else if(line==='' && eventType && eventData){handleSSEEvent(eventType,eventData);eventType='';eventData='';}
+      }
+    }
+  }catch(e){
+    if(e.name==='AbortError')return;
+    console.warn('SSE error, using fallback:',e);
+    fallbackRound();
+  }
+}
+
+function handleSSEEvent(type,data){
+  try{var d=JSON.parse(data)}catch(e){return}
+  switch(type){
+    case 'session_started':sessionId=d.session_id;break;
+    case 'round_started':philosopherResponses=[];break;
+    case 'agent_started':let name=agentNames[d.agent_id]||d.agent_id;renderTiles(name,{});break;
+    case 'message':
+      let msgName=agentNames[d.agent_id]||d.agent_id;let msgContent=d.content||'';
+      philosopherResponses.push({name:msgName,text:msgContent});
+      let texts={};for(let r of philosopherResponses)texts[r.name]=r.text;
+      renderTiles(msgName,texts);chat(msgName,msgContent);
+      history.push({agent_id:d.agent_id,agent_name:msgName,role:'agent',content:msgContent,round_index:n+1,model_id:d.model_id||''});
+      break;
+    case 'agent_skipped':let skipName=agentNames[d.agent_id]||d.agent_id;chat(skipName,'(本轮跳过发言)');break;
+    case 'round_completed':
+      waitingForUser=true;setUserInputEnabled(true);renderTiles(null,{});
+      $('#input').focus();showSuggestions();
+      break;
+    case 'session_completed':break;
+    case 'user_input_requested':
+      if(!waitingForUser){waitingForUser=true;setUserInputEnabled(true);renderTiles(null,{});showSuggestions();}
+      break;
+    case 'error':console.error('Session error:',d.error);fallbackRound();break;
+  }
+}
+
+function fallbackRound(){
+  if(!gameRunning)return;
+  let phils=['亚里士多德','庄子','韩非子','叔本华'];
+  let texts={'亚里士多德':'这个问题核心在于如何权衡。我们需要追问：什么情况下原则可以让步？','庄子':'角度不同，结论就不同。与其争对错，不如看看各自看到了什么。','韩非子':'现实从来不按理想剧本走。空谈道德不如正视利益冲突。','叔本华':'人总是被看不见的力量驱动。理性不过是欲望的遮羞布。'};
+  philosopherResponses=[];let i=0;
+  function speakNext(){
+    if(!gameRunning||i>=phils.length){waitingForUser=true;setUserInputEnabled(true);renderTiles(null,{});$('#input').focus();showSuggestions();return;}
+    let name=phils[i];let t=texts[name]||'这是一个值得思考的问题。';
+    philosopherResponses.push({name,text:t});
+    let m={};for(let r of philosopherResponses)m[r.name]=r.text;
+    renderTiles(name,m);chat(name,t);
+    history.push({agent_id:name,agent_name:name,role:'agent',content:t,round_index:n+1,model_id:''});
+    i++;if(i<phils.length)setTimeout(speakNext,800);else setTimeout(()=>{waitingForUser=true;setUserInputEnabled(true);renderTiles(null,{});$('#input').focus();showSuggestions();},500);
+  }
+  setTimeout(speakNext,300);
+}
+
+function showSuggestions(){
+  let suggestions=suggestionsList[n]||['请发表你的观点','你有什么想法？','说说你的看法'];
+  $('#suggestions').innerHTML=suggestions.map(x=>`<button class="suggestion">${x}</button>`).join('');
+  $$('.suggestion').forEach(b=>b.onclick=()=>{$('#input').value=b.textContent;submitUser(false);});
+}
+
+function submitUser(skip){
+  if(!waitingForUser||!gameRunning)return;
+  let v=skip?'我暂时没有答案，先听听其他人怎么说。':$('#input').value.trim();
+  if(!v&&!skip)return;
+  waitingForUser=false;setUserInputEnabled(false);$('#input').value='';$('#suggestions').innerHTML='';
+  if(!skip)trackChoice(v);
+  history.push({agent_id:'user',agent_name:'你',role:'user',content:v,round_index:n+1,model_id:''});
+  chat('你',v);
+  setTimeout(()=>{
+    if(n<9){n++;renderStory();renderTiles();if(gameRunning)startSession();}
+    else finish();
+  },500);
+}
+
+function trackChoice(text){
+  let weights={aristotle:0,zhuangzi:0,hanfeizi:0,schopenhauer:0};
+  let kws={aristotle:['行动','实践','判断','德性','选择','坚持','理性','权衡','原则','公平','正义'],zhuangzi:['角度','变化','自在','自然','相对','超脱','放下','包容','多元','语境'],hanfeizi:['现实','局势','果断','冷静','利益','冲突','实力','法治','权力','制度'],schopenhauer:['欲望','痛苦','理性','意志','悲观','力量','恐惧','本能','驱动','人性']};
+  for(let [agent,words] of Object.entries(kws)){for(let w of words){if(text.includes(w))weights[agent]+=2}}
+  if(text.includes('不')||text.includes('没'))weights.zhuangzi+=1;
+  if(text.includes('应该')||text.includes('必须'))weights.hanfeizi+=1;
+  if(text.includes('感觉')||text.includes('觉得'))weights.schopenhauer+=1;
+  if(text.includes('因为')||text.includes('所以'))weights.aristotle+=1;
+  for(let [k,v] of Object.entries(weights)){playerChoiceWeights[k]=(playerChoiceWeights[k]||0)+v}
+}
+
+function startGame(){
+  gameRunning=true;n=0;history=[];sessionId=null;playerChoiceWeights={};
+  $('#chat').innerHTML='';renderStory();setUserInputEnabled(false);
+  startSession();
+}
+
+function finish(){
+  gameRunning=false;if(abortController)abortController.abort();
+  let best='zhuangzi',bestScore=0;
+  for(let [k,v] of Object.entries(playerChoiceWeights)){if(v>bestScore){bestScore=v;best=k}}
+  let names={aristotle:'亚里士多德',zhuangzi:'庄子',hanfeizi:'韩非子',schopenhauer:'叔本华'};
+  let descs={aristotle:'你注重实践和判断，在行动中寻找答案。',zhuangzi:'你习惯从既定答案之外重新看问题，也愿意为不确定性留下空间。',hanfeizi:'你务实冷静，相信看清局势比空谈理想更重要。',schopenhauer:'你对人性有深刻洞察，不回避痛苦与欲望的真实。'};
+  $('#resultMatch').textContent='你最接近：'+(names[best]||'庄子');
+  $('#resultDesc').textContent=descs[best]||'你习惯从既定答案之外重新看问题，也愿意为不确定性留下空间。';
+  $('#finish').classList.add('show');
+}
+
+function restart(){$('#finish').classList.remove('show');startGame()}
+function finishRestart(){location.reload()}
+
+async function init(){
+  try{let r=await fetch('/api/health');let j=await r.json();if(j.status!=='ok')throw new Error('API not healthy')}catch(e){}
+  await fetchAgents();renderStory();renderTiles();setTimeout(startGame,500);
+}
+init();
+</script>
+</body>
+</html>
