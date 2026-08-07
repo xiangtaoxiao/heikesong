@@ -169,7 +169,7 @@ const suggestionsList=[
 ['民贵君轻是古代思想的高峰。','与现代民主有本质不同。','人民的主体地位需要制度保障。']
 ];
 
-let n=0;let sessionId=null;let history=[];let philosopherResponses=[];let waitingForUser=false;let gameRunning=false;let abortController=null;let agentNames={};let agentIds=[];let playerChoiceWeights={};const $=s=>document.querySelector(s);const $$=s=>document.querySelectorAll(s);
+let n=0;let sessionId=null;let history=[];let philosopherResponses=[];let philosopherTexts={};let waitingForUser=false;let gameRunning=false;let abortController=null;let agentNames={};let agentIds=[];let playerChoiceWeights={};let currentRound=1;let storyPhase=0;const $=s=>document.querySelector(s);const $$=s=>document.querySelectorAll(s);
 
 async function fetchAgents(){
   try{
@@ -200,11 +200,11 @@ function updateProgress(idx){
   for(let i=0;i<10;i++){let d=document.createElement('span');d.className='dot'+(i<idx?' done':'')+(i===idx?' current':'');bar.appendChild(d)}
 }
 
-function renderTiles(speakingName=null,texts={}){
+function renderTiles(speakingName=null){
   let s=data[n];let html='';
   html+=`<div class="tile host"><div class="tile-head"><span class="tile-avatar">🎙️</span><div><strong>主持人</strong><span class="tile-role"> · 会议主持</span></div></div><div class="tile-caption"><div class="screen-label">SCREEN SHARING · 论语原文</div><div class="screen-title">${s[0]}</div><div class="screen-source">${s[1]}</div><div class="screen-original">${s[3]}</div><div class="screen-story">${s[2]}</div></div><div class="tile-status">● 正在发言</div></div>`;
   let phils=['亚里士多德','庄子','韩非子','叔本华'];let emojis={'亚里士多德':'🧔','庄子':'🧑‍🎨','韩非子':'🧑‍⚖️','叔本华':'🧓'};
-  for(let name of phils){let isSpeaking=name===speakingName;let text=texts[name]||'等待发言';html+=`<div class="tile a ${isSpeaking?'speaking':''}"><div class="tile-head"><span class="tile-avatar">${emojis[name]}</span><div><strong>${name}</strong><span class="tile-role"> · 哲学家</span></div></div><div class="tile-face">${emojis[name]}</div><div class="tile-copy">${text}</div><div class="tile-status">${isSpeaking?'● 正在发言':'⌁ 静音'}</div></div>`;}
+  for(let name of phils){let isSpeaking=name===speakingName;let text=philosopherTexts[name]||'等待发言';html+=`<div class="tile a ${isSpeaking?'speaking':''}"><div class="tile-head"><span class="tile-avatar">${emojis[name]}</span><div><strong>${name}</strong><span class="tile-role"> · 哲学家</span></div></div><div class="tile-face">${emojis[name]}</div><div class="tile-copy">${text}</div><div class="tile-status">${isSpeaking?'● 正在发言':'⌁ 静音'}</div></div>`;}
   html+=`<div class="tile player"><div class="tile-face">🧑</div><div class="tile-copy">你 — ${waitingForUser?'轮到你了':'正在聆听'}</div><div class="tile-status">⌁ ${waitingForUser?'可发言':'已加入'}</div></div>`;
   $('#grid').innerHTML=html;
 }
@@ -224,7 +224,7 @@ function setUserInputEnabled(enabled){
 async function startSession(){
   if(!gameRunning)return;
   let s=data[n];let topic=s[0]+'：'+s[2];let sysPrompt=systemPrompts[n];
-  let req={topic:topic,agent_ids:agentIds,rounds:10,start_round:n+1,run_rounds:1,system_prompt:sysPrompt,history:history,mode:'roundtable'};
+  let req={topic:topic,agent_ids:agentIds,rounds:20,start_round:currentRound,run_rounds:1,system_prompt:sysPrompt,history:history,mode:'roundtable'};
   if(sessionId)req.session_id=sessionId;
   waitingForUser=false;setUserInputEnabled(false);philosopherResponses=[];
   abortController=new AbortController();
@@ -256,13 +256,12 @@ function handleSSEEvent(type,data){
   switch(type){
     case 'session_started':sessionId=d.session_id;break;
     case 'round_started':philosopherResponses=[];break;
-    case 'agent_started':let name=agentNames[d.agent_id]||d.agent_id;renderTiles(name,{});break;
+    case 'agent_started':let name=agentNames[d.agent_id]||d.agent_id;renderTiles(name);break;
     case 'message':
       let msgName=agentNames[d.agent_id]||d.agent_id;let msgContent=d.content||'';
-      philosopherResponses.push({name:msgName,text:msgContent});
-      let texts={};for(let r of philosopherResponses)texts[r.name]=r.text;
-      renderTiles(msgName,texts);chat(msgName,msgContent);
-      history.push({agent_id:d.agent_id,agent_name:msgName,role:'agent',content:msgContent,round_index:n+1,model_id:d.model_id||''});
+      philosopherTexts[msgName]=msgContent;philosopherResponses.push({name:msgName,text:msgContent});
+      renderTiles(msgName);chat(msgName,msgContent);
+      history.push({agent_id:d.agent_id,agent_name:msgName,role:'agent',content:msgContent,round_index:currentRound,model_id:d.model_id||''});
       break;
     case 'agent_skipped':let skipName=agentNames[d.agent_id]||d.agent_id;chat(skipName,'(本轮跳过发言)');break;
     case 'round_completed':
@@ -280,16 +279,17 @@ function handleSSEEvent(type,data){
 function fallbackRound(){
   if(!gameRunning)return;
   let phils=['亚里士多德','庄子','韩非子','叔本华'];
-  let texts={'亚里士多德':'这个问题核心在于如何权衡。我们需要追问：什么情况下原则可以让步？','庄子':'角度不同，结论就不同。与其争对错，不如看看各自看到了什么。','韩非子':'现实从来不按理想剧本走。空谈道德不如正视利益冲突。','叔本华':'人总是被看不见的力量驱动。理性不过是欲望的遮羞布。'};
+  let texts1={'亚里士多德':'这个问题核心在于如何权衡。我们需要追问：什么情况下原则可以让步？','庄子':'角度不同，结论就不同。与其争对错，不如看看各自看到了什么。','韩非子':'现实从来不按理想剧本走。空谈道德不如正视利益冲突。','叔本华':'人总是被看不见的力量驱动。理性不过是欲望的遮羞布。'};
+  let texts2={'亚里士多德':'你的观点很有启发性，但我们需要进一步追问：这个立场在实践中能否自洽？','庄子':'你说得对，但别忘了，任何立场都有其对立面。','韩非子':'理想很美好，但现实中的利益博弈才是决定因素。','叔本华':'你的思考暴露了人类理性的局限性——我们总在为自己的欲望找理由。'};
+  let texts=storyPhase===0?texts1:texts2;
   philosopherResponses=[];let i=0;
   function speakNext(){
-    if(!gameRunning||i>=phils.length){waitingForUser=true;setUserInputEnabled(true);renderTiles(null,{});$('#input').focus();showSuggestions();return;}
+    if(!gameRunning||i>=phils.length){waitingForUser=true;setUserInputEnabled(true);renderTiles(null);$('#input').focus();showSuggestions();return;}
     let name=phils[i];let t=texts[name]||'这是一个值得思考的问题。';
-    philosopherResponses.push({name,text:t});
-    let m={};for(let r of philosopherResponses)m[r.name]=r.text;
-    renderTiles(name,m);chat(name,t);
-    history.push({agent_id:name,agent_name:name,role:'agent',content:t,round_index:n+1,model_id:''});
-    i++;if(i<phils.length)setTimeout(speakNext,800);else setTimeout(()=>{waitingForUser=true;setUserInputEnabled(true);renderTiles(null,{});$('#input').focus();showSuggestions();},500);
+    philosopherTexts[name]=t;philosopherResponses.push({name,text:t});
+    renderTiles(name);chat(name,t);
+    history.push({agent_id:name,agent_name:name,role:'agent',content:t,round_index:currentRound,model_id:''});
+    i++;if(i<phils.length)setTimeout(speakNext,800);else setTimeout(()=>{waitingForUser=true;setUserInputEnabled(true);renderTiles(null);$('#input').focus();showSuggestions();},500);
   }
   setTimeout(speakNext,300);
 }
@@ -306,12 +306,19 @@ function submitUser(skip){
   if(!v&&!skip)return;
   waitingForUser=false;setUserInputEnabled(false);$('#input').value='';$('#suggestions').innerHTML='';
   if(!skip)trackChoice(v);
-  history.push({agent_id:'user',agent_name:'你',role:'user',content:v,round_index:n+1,model_id:''});
+  history.push({agent_id:'user',agent_name:'你',role:'user',content:v,round_index:currentRound,model_id:''});
   chat('你',v);
-  setTimeout(()=>{
-    if(n<9){n++;renderStory();renderTiles();if(gameRunning)startSession();}
-    else finish();
-  },500);
+  currentRound++;storyPhase++;
+  if(storyPhase===1){
+    // Phase 1 done: user responded, now let agents respond to user
+    setTimeout(()=>{if(gameRunning)startSession()},500);
+  } else {
+    // Phase 2 done: agents responded to user, move to next story
+    setTimeout(()=>{
+      if(n<9){n++;storyPhase=0;renderStory();philosopherTexts={};renderTiles();if(gameRunning)startSession();}
+      else finish();
+    },500);
+  }
 }
 
 function trackChoice(text){
@@ -326,7 +333,7 @@ function trackChoice(text){
 }
 
 function startGame(){
-  gameRunning=true;n=0;history=[];sessionId=null;playerChoiceWeights={};
+  gameRunning=true;n=0;history=[];sessionId=null;playerChoiceWeights={};currentRound=1;storyPhase=0;philosopherTexts={};
   $('#chat').innerHTML='';renderStory();setUserInputEnabled(false);
   startSession();
 }
