@@ -10,9 +10,11 @@ from __future__ import annotations
 import json
 import logging
 import re
+import shutil
+import subprocess
+import tempfile
 import time
-import urllib.error
-import urllib.request
+from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse, Response
@@ -79,35 +81,45 @@ def _post_json(url: str, key: str, payload: dict, timeout: int = 90, operation: 
     started = time.perf_counter()
     outcome = "success"
     status_code = 200
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-            # openai-next 的 Cloudflare 会拦 Python-urllib 默认 UA（error 1010）
-            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) jixia-game/1.0",
-        },
-        method="POST",
-    )
+    curl = shutil.which("curl")
+    if not curl:
+        raise HTTPException(status_code=503, detail="curl is required for upstream requests")
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    config_path = None
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.read()
-    except urllib.error.HTTPError as exc:
-        outcome = "http_error"
-        status_code = exc.code
-        body = exc.read().decode("utf-8", "replace")[:300]
-        LOGGER.error("upstream %s -> %s %s", url, exc.code, body)
-        raise HTTPException(status_code=502, detail=f"upstream {exc.code}: {body}")
-    except urllib.error.URLError as exc:
-        outcome = "unreachable"
-        status_code = 502
-        raise HTTPException(status_code=502, detail=f"upstream unreachable: {exc.reason}")
-    except TimeoutError:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", delete=False) as config_file:
+            config_path = config_file.name
+            config_file.write(
+                f'url = "{url}"\nrequest = "POST"\n'
+                f'header = "Authorization: Bearer {key}"\n'
+                'header = "Content-Type: application/json"\n'
+                'header = "User-Agent: Mozilla/5.0 curl-game-client/1.0"\n'
+                f'connect-timeout = 10\nmax-time = {timeout}\n'
+            )
+        result = subprocess.run(
+            [curl, "--silent", "--show-error", "--fail-with-body", "--config", config_path, "--data-binary", "@-"],
+            input=body,
+            capture_output=True,
+            timeout=timeout + 5,
+            check=False,
+        )
+        if result.returncode:
+            message = result.stderr.decode("utf-8", "replace").strip()[:300]
+            status_code = 504 if result.returncode == 28 else 502
+            outcome = "timeout" if result.returncode == 28 else "curl_error"
+            LOGGER.error("upstream curl failed operation=%s code=%s message=%s", operation, result.returncode, message)
+            raise HTTPException(status_code=status_code, detail=f"upstream request failed: {message or result.returncode}")
+        return result.stdout
+    except subprocess.TimeoutExpired:
         outcome = "timeout"
         status_code = 504
         raise HTTPException(status_code=504, detail="upstream timeout")
     finally:
+        if config_path:
+            try:
+                Path(config_path).unlink(missing_ok=True)
+            except OSError:
+                LOGGER.warning("could not remove temporary curl config")
         log_game_latency(
             "upstream_request",
             operation=operation,
@@ -115,7 +127,7 @@ def _post_json(url: str, key: str, payload: dict, timeout: int = 90, operation: 
             outcome=outcome,
             status_code=status_code,
             timeout_s=timeout,
-            input_bytes=len(json.dumps(payload, ensure_ascii=False).encode("utf-8")),
+            input_bytes=len(body),
         )
 
 
