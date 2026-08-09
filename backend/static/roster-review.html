@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>角色素材审阅 v3 · 稷下</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f6f2e8; color: #2f3430; font-family: "Songti SC","STSong",serif; padding: 36px 5vw 60px; }
+h1 { font-size: 26px; letter-spacing: 6px; }
+.sub { color: #6f6f63; font-size: 13px; margin: 8px 0 24px; line-height: 1.8; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 16px; }
+.card { background: #fbf8f0; border: 1px solid #ddd5c2; border-radius: 14px; overflow: hidden; }
+.card .fig { height: 310px; display: flex; align-items: flex-end; justify-content: center;
+  background: linear-gradient(180deg, #eef0e2, #dde3cf); position: relative; }
+.card .fig img { max-height: 92%; max-width: 88%; object-fit: contain;
+  filter: drop-shadow(0 8px 10px rgba(50,60,40,.28)); }
+.card .fig .badge { position: absolute; top: 8px; left: 8px; font-size: 11px; color: #fff;
+  padding: 2px 9px; border-radius: 5px; letter-spacing: 1px; }
+.badge.final { background: rgba(61,89,64,.88); }
+.badge.new { background: rgba(194,107,74,.92); }
+.badge.you { background: rgba(51,86,107,.92); }
+.card .meta { padding: 12px 14px; }
+.card .meta b { font-size: 17px; }
+.card .meta .tag { font-size: 12px; color: #6f6f63; margin-left: 6px; }
+.card .meta .info { font-size: 11px; color: #a9a390; margin-top: 5px; }
+</style>
+</head>
+<body>
+<h1>角色素材审阅 v3 · 统一动画风</h1>
+<div class="sub">
+风格基准 = 你的 roundtable-character-concepts-v2 文件夹。<b style="color:#3d5940">定稿</b>四张直接取自文件夹（孔子/苏格拉底/康德/玩家）；
+<b style="color:#c26b4a">新生成</b>七张以文件夹四张为参考图 + 同设计师提示词重绘。<br>
+文件夹里的<b>亚里士多德</b>也已入库备用（design-v2/），要上场随时说。全部为透明底 PNG，直接可做雪碧图基准。
+</div>
+<div class="grid" id="grid"></div>
+<script>
+const CAST = [
+  ['kongzi','孔子','义与关系','final'],
+  ['socrates','苏格拉底','追问概念','final'],
+  ['kant','康德','原则与义务','final'],
+  ['hanfeizi','韩非子','法与权术','new'],
+  ['laozi','老子','不辩者','new'],
+  ['zhuangzi','庄子','鼓盆的人','new'],
+  ['mozi','墨子','天下的会计','new'],
+  ['wangyangming','王阳明','致良知','new'],
+  ['nietzsche','尼采','持锤者','new'],
+  ['diogenes','第欧根尼','木桶里的狗','new'],
+  ['player','你 · 玩家','旁听的年轻人','you'],
+];
+const LABEL = { final: '定稿 · 你的文件夹', new: '新生成 · 待审', you: '玩家 · 定稿' };
+const grid = document.getElementById('grid');
+CAST.forEach(([id, name, tag, st]) => {
+  grid.insertAdjacentHTML('beforeend', `
+    <div class="card">
+      <div class="fig">
+        <span class="badge ${st}">${LABEL[st]}</span>
+        <img src="/static/assets/refs/static-${id}.png">
+      </div>
+      <div class="meta">
+        <b>${name}</b><span class="tag">${tag}</span>
+        <div class="info">refs/static-${id}.png</div>
+      </div>
+    </div>`);
+});
+</script>
+</body>
+</html>

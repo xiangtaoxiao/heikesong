@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>稷下 · 论语圆桌</title>
-<link rel="stylesheet" href="/static/game/game.css">
+<link rel="stylesheet" href="/static/game/game.css?v=20260810-voice2">
 </head>
 <body>
 
@@ -48,10 +48,9 @@
       <span class="tb-story" id="tb-story"></span>
     </div>
     <div class="tb-right">
-      <label class="mode-switch" title="语音房 / 文字模式切换">
-        <input type="checkbox" id="mode-toggle" checked>
-        <span class="ms-track"><span class="ms-voice">🔊 语音房</span><span class="ms-text">💬 文字</span></span>
-      </label>
+      <button class="audio-control" id="btn-mute" aria-pressed="false" title="关闭所有角色与主持人的播放声音">
+        <span class="audio-icon">🔊</span><span class="audio-label">声音开启</span>
+      </button>
       <button class="tb-btn" id="btn-log">📜 对话记录 <b id="log-count">0</b></button>
       <button class="tb-btn tb-leave" id="btn-leave">结束会议</button>
     </div>
@@ -78,7 +77,7 @@
       <div class="host-banner" id="host-banner"></div>
       <div id="chars"></div>
       <div class="bubble" id="bubble"><div class="bubble-name" id="bubble-name"></div><div class="bubble-text" id="bubble-text"></div></div>
-      <div class="think" id="think">…</div>
+      <div class="think" id="think">正在想…</div>
       <div class="user-cue" id="user-cue">
         <span>轮到你了</span><i id="cue-count">10</i>
         <button id="btn-skip-cue">跳过</button>
@@ -117,6 +116,6 @@
   </div>
 </section>
 
-<script src="/static/game/game.js"></script>
+<script src="/static/game/game.js?v=20260810-voice2"></script>
 </body>
 </html>
