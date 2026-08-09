@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>稷下 · 论语圆桌</title>
+<link rel="stylesheet" href="/static/game/game.css">
+</head>
+<body>
+
+<!-- ═══ 开始页 ═══ -->
+<section id="screen-start" class="screen active">
+  <div class="start-card">
+    <div class="start-seal">稷下</div>
+    <h1>稷下 · 论语圆桌</h1>
+    <p class="start-sub">让《论语》重新吵起来</p>
+    <div class="start-rule"></div>
+    <p class="start-desc">
+      三桩公案 · 一场语音圆桌<br>
+      孔子在场，反对过他的人也在场。<br>
+      <b>你随时可以开口。</b>
+    </p>
+    <button class="btn-primary" id="btn-to-select">入 场</button>
+    <p class="start-note" id="health-note">…</p>
+  </div>
+</section>
+
+<!-- ═══ 选哲学家 ═══ -->
+<section id="screen-select" class="screen">
+  <div class="select-wrap">
+    <h2>请入席 <span class="select-hint">选 2–4 位同桌 · 孔子已在主位</span></h2>
+    <div class="pick-grid" id="pick-grid"></div>
+    <div class="select-stories">
+      <span class="ss-label">今晚三案</span>
+      <span class="ss-item">① 一只羊<i>子路 13.18</i></span>
+      <span class="ss-item">② 门口的仇人<i>宪问 14.34</i></span>
+      <span class="ss-item">③ 三年之丧<i>阳货 17.21</i></span>
+    </div>
+    <button class="btn-primary" id="btn-start-game" disabled>开始圆桌</button>
+  </div>
+</section>
+
+<!-- ═══ 圆桌 ═══ -->
+<section id="screen-table" class="screen">
+  <header class="topbar">
+    <div class="tb-left">
+      <span class="tb-logo">稷下 · 论语圆桌</span>
+      <span class="tb-story" id="tb-story"></span>
+    </div>
+    <div class="tb-right">
+      <label class="mode-switch" title="语音房 / 文字模式切换">
+        <input type="checkbox" id="mode-toggle" checked>
+        <span class="ms-track"><span class="ms-voice">🔊 语音房</span><span class="ms-text">💬 文字</span></span>
+      </label>
+      <button class="tb-btn" id="btn-log">📜 对话记录 <b id="log-count">0</b></button>
+      <button class="tb-btn tb-leave" id="btn-leave">结束会议</button>
+    </div>
+  </header>
+
+  <div class="table-main">
+    <!-- 左：故事剧场 -->
+    <aside class="theater">
+      <div class="slate" id="slate">
+        <div class="slate-rod"></div>
+        <div class="slate-body">
+          <div class="slate-tag" id="slate-tag">当前议题</div>
+          <div class="slate-text" id="slate-text"></div>
+          <button class="slate-orig" id="btn-original">📖 查看原文</button>
+        </div>
+        <div class="slate-rod slate-rod-b"></div>
+      </div>
+      <div class="theater-strip"><img id="theater-img" alt="故事剧场"></div>
+    </aside>
+
+    <!-- 右：园林舞台 -->
+    <main class="stage" id="stage">
+      <div class="stage-bg"></div>
+      <div class="host-banner" id="host-banner"></div>
+      <div id="chars"></div>
+      <div class="bubble" id="bubble"><div class="bubble-name" id="bubble-name"></div><div class="bubble-text" id="bubble-text"></div></div>
+      <div class="think" id="think">…</div>
+      <div class="user-cue" id="user-cue">
+        <span>轮到你了</span><i id="cue-count">10</i>
+        <button id="btn-skip-cue">跳过</button>
+      </div>
+    </main>
+  </div>
+
+  <footer class="inputbar">
+    <button class="mic" id="btn-mic" title="语音发言（按一下开始/结束）">🎤</button>
+    <input id="user-input" type="text" maxlength="120" placeholder="随时插话；点击场上的哲学家可点名提问…" autocomplete="off">
+    <button class="btn-send" id="btn-send">发言</button>
+    <button class="btn-interrupt" id="btn-interrupt">✋ 打断</button>
+  </footer>
+
+  <!-- 对话记录抽屉 -->
+  <div class="drawer" id="drawer">
+    <div class="drawer-head">对话记录 <button id="btn-drawer-close">✕</button></div>
+    <div class="drawer-body" id="drawer-body"></div>
+  </div>
+
+  <!-- 原文弹窗 -->
+  <div class="modal" id="modal-original">
+    <div class="modal-card">
+      <div class="modal-head" id="orig-source"></div>
+      <div class="orig-text" id="orig-text"></div>
+      <div class="orig-note" id="orig-note"></div>
+      <button class="btn-ghost" id="btn-orig-close">合上</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ 终局报告 ═══ -->
+<section id="screen-report" class="screen">
+  <div class="report-wrap" id="report-wrap">
+    <p class="report-loading">主持人正在为你写终局报告…</p>
+  </div>
+</section>
+
+<script src="/static/game/game.js"></script>
+</body>
+</html>

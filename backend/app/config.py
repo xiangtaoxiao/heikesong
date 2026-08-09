@@ -28,6 +28,16 @@ DEFAULT_SKILL_AGENTS = [
     {"agent_id": "schopenhauer", "skill_dir": "schopenhauer-agent", "display_name": "叔本华"},
     {"agent_id": "zhuangzi", "skill_dir": "zhuangzi-agent", "display_name": "庄子"},
     {"agent_id": "hanfeizi", "skill_dir": "hanfeizi-agent", "display_name": "韩非子"},
+    {"agent_id": "confucius", "skill_dir": "confucius-agent", "display_name": "孔子"},
+    {"agent_id": "socrates", "skill_dir": "socrates-agent", "display_name": "苏格拉底"},
+    {"agent_id": "laozi", "skill_dir": "laozi-agent", "display_name": "老子"},
+    {"agent_id": "mozi", "skill_dir": "mozi-agent", "display_name": "墨子"},
+    {"agent_id": "kant", "skill_dir": "kant-agent", "display_name": "康德"},
+    {"agent_id": "nietzsche", "skill_dir": "nietzsche-agent", "display_name": "尼采"},
+    {"agent_id": "plato", "skill_dir": "plato-agent", "display_name": "柏拉图"},
+    {"agent_id": "wangyangming", "skill_dir": "wangyangming-agent", "display_name": "王阳明"},
+    {"agent_id": "sartre", "skill_dir": "sartre-agent", "display_name": "萨特"},
+    {"agent_id": "diogenes", "skill_dir": "diogenes-agent", "display_name": "第欧根尼"},
 ]
 
 

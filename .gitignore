@@ -4,3 +4,10 @@ __pycache__/
 backend/data/sessions/*.jsonl
 backend/log/*.log
 backend/data/sessions/.gitkeep
+
+# secrets & local env
+backend/config/api_config.json
+backend/.venv/
+.venv/
+backend/log/
+nohup.out

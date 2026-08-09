@@ -23,10 +23,13 @@ from .storage import (
 )
 
 
+from .game import router as game_router
+
 setup_logging()
 ensure_directories()
 LOGGER = logging.getLogger(__name__)
 app = FastAPI(title="Philosopher Agent Web Backend", version="0.1.0")
+app.include_router(game_router)
 runner = DialogueRunner()
 STATIC_DIR = ROOT / "static"
 
