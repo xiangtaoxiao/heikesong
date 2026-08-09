@@ -55,8 +55,8 @@ button { font-family: var(--serif); cursor: pointer; }
 .select-wrap { text-align: center; width: min(1080px, 94vw); }
 .select-wrap h2 { font-size: 28px; letter-spacing: 10px; margin-bottom: 6px; }
 .select-hint { font-size: 13px; letter-spacing: 1px; color: var(--ink-dim); }
-.pick-grid { display: grid; grid-template-columns: repeat(6, 150px); gap: 12px; justify-content: center; margin: 24px 0 14px; }
-.pick-card { width: 150px; background: var(--paper); border: 2px solid var(--line); border-radius: 14px;
+.pick-grid { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin: 26px 0 18px; }
+.pick-card { width: 148px; background: var(--paper); border: 2px solid var(--line); border-radius: 14px;
   padding: 14px 8px 12px; transition: all .18s; position: relative; cursor: pointer; }
 .pick-card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
 .pick-card.picked { border-color: var(--sage-deep); background: #f0f4ea; }
@@ -64,7 +64,7 @@ button { font-family: var(--serif); cursor: pointer; }
 .pick-card .pick-mark { position: absolute; top: 8px; right: 10px; width: 22px; height: 22px; border-radius: 50%;
   border: 2px solid var(--line); font-size: 13px; line-height: 19px; color: transparent; background: var(--paper); }
 .pick-card.picked .pick-mark, .pick-card.locked .pick-mark { border-color: var(--sage-deep); background: var(--sage-deep); color: #fff; }
-.pick-sprite { width: 108px; height: 180px; margin: 0 auto; background-size: 500% 200%; background-position: 0% 0%; }
+.pick-sprite { width: 122px; height: 136px; margin: 0 auto; background-size: 500% 300%; background-position: 0% 0%; }
 .text-portrait { display: flex; align-items: center; justify-content: center; color: #fff; background: var(--portrait-color); border: 5px double rgba(255,255,255,.72); box-shadow: inset 0 0 0 2px rgba(0,0,0,.12); font-weight: 700; letter-spacing: 5px; writing-mode: vertical-rl; text-orientation: upright; }
 .pick-sprite.text-portrait { width: 100px; height: 156px; margin: 10px auto 14px; font-size: 23px; border-radius: 50px 50px 12px 12px; }
 .pick-card .pk-name { font-size: 17px; font-weight: 700; margin-top: 6px; }
@@ -85,11 +85,13 @@ button { font-family: var(--serif); cursor: pointer; }
   border-radius: 8px; color: var(--ink); }
 .tb-btn:hover { border-color: var(--sage); }
 .tb-leave { color: var(--terra); }
-.mode-switch input { display: none; }
-.ms-track { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 13px; cursor: pointer; }
-.ms-track span { padding: 7px 12px; color: var(--ink-dim); }
-.mode-switch input:checked + .ms-track .ms-voice { background: var(--sage-deep); color: #fff; }
-.mode-switch input:not(:checked) + .ms-track .ms-text { background: var(--blue); color: #fff; }
+.audio-control { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 5px 12px 5px 6px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--ink); font-size: 13px; }
+.audio-control:hover { border-color: var(--sage); }
+.audio-icon { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: var(--sage-deep); color: #fff; font-size: 12px; }
+.audio-label { letter-spacing: .6px; }
+.audio-control.muted .audio-icon { background: var(--terra); }
+.audio-control.muted .audio-label { color: var(--terra); }
 
 .table-main { flex: 1; display: flex; min-height: 0; }
 
@@ -104,7 +106,6 @@ button { font-family: var(--serif); cursor: pointer; }
 .slate-reading { margin-bottom: 13px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .slate-source { font-size: 10px; letter-spacing: 1.2px; color: var(--terra); margin-bottom: 6px; }
 .slate-original { font-size: 13px; line-height: 1.75; color: var(--ink); }
-.slate-translation { margin-top: 7px; font-size: 12px; line-height: 1.7; color: var(--ink-dim); }
 .slate-tag { display: inline-block; font-size: 11px; letter-spacing: 2px; color: #fff; background: var(--terra);
   border-radius: 5px; padding: 2px 9px; transition: background .3s; }
 .slate-tag.upgraded { background: var(--blue); animation: stamp .5s ease; }
@@ -121,8 +122,10 @@ button { font-family: var(--serif); cursor: pointer; }
 .stage-bg { position: absolute; inset: 0; background: url('/static/assets/bg/garden.png') center/cover; }
 #chars { position: absolute; inset: 0; }
 .char { position: absolute; transform: translateX(-50%); transition: transform .5s, filter .5s, bottom .5s; cursor: pointer; }
-.char .sprite { width: 210px; height: 350px; background-size: 500% 200%; background-position: 0% 0%;
+.char .sprite { width: 250px; height: 278px; background-size: 500% calc(var(--sprite-rows, 3) * 100%); background-position: 0% 0%;
   filter: drop-shadow(0 10px 10px rgba(50,60,40,.25)); }
+.char:has(.sprite[data-sprite-rows="3"]) { cursor: default; }
+.char .sprite[data-sprite-rows="3"] { width: 250px; height: 278px; }
 .char .sprite.text-portrait { width: 125px; height: 260px; margin: 0 auto; border-radius: 62px 62px 16px 16px; font-size: 30px; }
 .char .ground { position: absolute; left: 50%; bottom: 2px; width: 130px; height: 26px; transform: translateX(-50%);
   background: radial-gradient(ellipse, rgba(92,122,94,.55), transparent 70%); opacity: 0; transition: opacity .4s; }
@@ -243,7 +246,7 @@ button { font-family: var(--serif); cursor: pointer; }
 .report-card h2 { text-align: center; font-size: 24px; letter-spacing: 8px; margin-bottom: 4px; }
 .report-sub { text-align: center; font-size: 12px; color: var(--ink-dim); letter-spacing: 2px; margin-bottom: 24px; }
 .report-top { display: flex; gap: 26px; align-items: center; margin-bottom: 24px; }
-.report-sprite { width: 126px; height: 210px; background-size: 500% 200%; background-position: 0% 0%; flex-shrink: 0; }
+.report-sprite { width: 150px; height: 167px; background-size: 500% 300%; background-position: 0% 0%; flex-shrink: 0; }
 .report-sprite.text-portrait { width: 110px; height: 185px; border-radius: 55px 55px 14px 14px; font-size: 24px; }
 .report-match { font-size: 15px; color: var(--ink-dim); }
 .report-match b { font-size: 24px; letter-spacing: 3px; display: block; margin-top: 4px; }

@@ -25,10 +25,19 @@ async function sleep(ms) {
 
 const CAST = {
   kongzi: { name: '孔子', tag: '义与关系', color: '#2e5f5c', sprite: true }, socrates: { name: '苏格拉底', tag: '追问概念', color: '#b08c3d', sprite: true }, hanfeizi: { name: '韩非子', tag: '法与权术', color: '#a83226', sprite: true }, kant: { name: '康德', tag: '原则与义务', color: '#31548c', sprite: true }, laozi: { name: '老子', tag: '不辩者', color: '#7a8b6f', sprite: true }, zhuangzi: { name: '庄子', tag: '鼓盆的人', color: '#8a5a33', sprite: true },
-  aristotle: { name: '亚里士多德', tag: '实践智慧', color: '#7b5e3b' }, mozi: { name: '墨子', tag: '兼爱非攻', color: '#4f6d54' }, nietzsche: { name: '尼采', tag: '重估价值', color: '#8d3e32' }, plato: { name: '柏拉图', tag: '洞穴与真理', color: '#536b9b' }, sartre: { name: '萨特', tag: '自由与责任', color: '#3f3f54' }, wangyangming: { name: '王阳明', tag: '致良知', color: '#a1663a' },
+  aristotle: { name: '亚里士多德', tag: '实践智慧', color: '#7b5e3b' }, mozi: { name: '墨子', tag: '兼爱非攻', color: '#4f6d54', sprite: true }, nietzsche: { name: '尼采', tag: '重估价值', color: '#8d3e32', sprite: true }, plato: { name: '柏拉图', tag: '洞穴与真理', color: '#536b9b' }, sartre: { name: '萨特', tag: '自由与责任', color: '#3f3f54' }, wangyangming: { name: '王阳明', tag: '致良知', color: '#a1663a', sprite: true }, diogenes: { name: '第欧根尼', tag: '陶罐里的狗', color: '#7d7a6a', sprite: true },
+  player: { name: '你', tag: '参与者', color: '#33566b', sprite: true, player: true },
 };
-const SPRITE = (id) => `/static/assets/sprites/${id}.png`;
-const portrait = (id, className) => CAST[id].sprite ? `<div class="${className}" style="background-image:url('${SPRITE(id)}')"></div>` : `<div class="${className} text-portrait" style="--portrait-color:${CAST[id].color}">${CAST[id].name}</div>`;
+const SPRITE = (id, version = 'a') => `/static/assets/sprites/${id}-${version}.png`;
+const SPRITE_FRAMES = 15;
+const SELECTABLE_IDS = Object.keys(CAST).filter((id) => id !== 'player' && CAST[id].sprite);
+const randomSpeakingPose = () => (Math.random() < 0.5 ? 'a' : 'b');
+const randomListeningPose = () => (Math.random() < 0.5 ? 'ia' : 'ib');
+function setSpritePose(id, version) {
+  const sprite = S.chars[id]?.el.querySelector('.sprite');
+  if (sprite) sprite.style.backgroundImage = `url('${SPRITE(id, version)}')`;
+}
+const portrait = (id, className) => CAST[id].sprite ? `<div class="${className}" data-sprite-rows="3" style="background-image:url('${SPRITE(id)}');--sprite-rows:3"></div>` : `<div class="${className} text-portrait" style="--portrait-color:${CAST[id].color}">${CAST[id].name}</div>`;
 
 const STORIES = [
   { id: 's1', title: '一只羊',     source: '《论语·子路》13.18', focal: '这个儿子做对了吗？' },
@@ -42,6 +51,16 @@ const STORIES = [
   { id: 's9', title: '三人行必有我师', source: '《论语·述而》7.22', focal: '学习怎样不盲从？' },
   { id: 's10', title: '乘桴浮于海', source: '《论语·公冶长》5.7', focal: '道路不通时如何选择？' },
 ];
+const STAGE_SEATS = {
+  image: '/static/assets/bg/candidate-6.png',
+  anchors: {
+    BL: [38, 42, 0.62], BC: [51, 41, 0.64], BR: [63, 42, 0.63],
+    ML: [25, 27, 0.82], MR: [76, 27, 0.84], CL: [36, 29, 0.78], CR: [65, 30, 0.80],
+    P: [50, 9, 0.78],
+  },
+  subsets: { 1: ['CR'], 2: ['CL', 'CR'], 3: ['CL', 'CR', 'BC'], 4: ['ML', 'MR', 'BL', 'BR'] },
+  player: 'P',
+};
 let STORY_META = {};   // 从后端 config 静态文件补全 host 台词/原文（见 boot）
 
 // ─── 全局状态 ───
@@ -58,7 +77,7 @@ const S = {
   cueActive: false,
   cuePaused: false,
   interruptFlag: false,
-  voiceMode: true,
+  audioMuted: false,
   running: false,
   aborted: false,
   paused: false,
@@ -73,6 +92,7 @@ const S = {
   hostBannerVersion: 0,
   turnEpoch: 0,
   chars: {},            // id → {el, x, bottom, scale}
+  seatAssign: null,
 };
 
 // ═══ 启动 ═══
@@ -82,6 +102,7 @@ async function boot() {
     STORY_META = await r.json();
   } catch { STORY_META = null; }
   $('#health-note').textContent = STORY_META ? '● 语音房已就绪（Haiku × Qwen-TTS）' : '◌ 剧场配置缺失';
+  $('#stage').querySelector('.stage-bg').style.background = `url('${STAGE_SEATS.image}') center / 100% 100% no-repeat`;
   renderStoryList();
   if (STORY_META) prefetchHost(STORIES[0], 'intro');
 
@@ -97,14 +118,7 @@ async function boot() {
   $('#btn-leave').onclick = endMeeting;
   $('#btn-original').onclick = () => $('#modal-original').classList.add('open');
   $('#btn-orig-close').onclick = () => $('#modal-original').classList.remove('open');
-  $('#mode-toggle').onchange = (e) => {
-    S.voiceMode = e.target.checked;
-    if (!S.voiceMode) {
-      cancelAudioRequests();
-      if (S.audio) { try { S.audio.pause(); } catch {} }
-      if (S.stopAudio) S.stopAudio();
-    }
-  };
+  $('#btn-mute').onclick = toggleMute;
   $('#btn-skip-cue').onclick = () => { S.cueSkip = true; };
   setupMic();
   window.addEventListener('resize', () => layoutChars(true));
@@ -141,7 +155,8 @@ function renderPick() {
   const grid = $('#pick-grid');
   grid.innerHTML = '';
   const picked = new Set(['kongzi']);
-  Object.entries(CAST).forEach(([id, c]) => {
+  SELECTABLE_IDS.forEach((id) => {
+    const c = CAST[id];
     const d = document.createElement('div');
     d.className = 'pick-card' + (id === 'kongzi' ? ' locked' : '');
     d.innerHTML = `<div class="pick-mark">✓</div>
@@ -151,7 +166,8 @@ function renderPick() {
     // 悬停时播放雪碧图动画
     let t = null, f = 0;
     const sp = d.querySelector('.pick-sprite');
-    if (c.sprite) { d.onmouseenter = () => { t = setInterval(() => { f = (f + 1) % 10; setFrame(sp, f); }, 150); }; d.onmouseleave = () => { clearInterval(t); setFrame(sp, 0); }; }
+    d.onmouseenter = () => { t = setInterval(() => setFrame(sp, pingpong(++f)), 130); };
+    d.onmouseleave = () => { clearInterval(t); f = 0; setFrame(sp, 0); };
     d.onclick = () => {
       if (id === 'kongzi') return;              // 孔子锁定主位
       if (picked.has(id)) picked.delete(id);
@@ -169,41 +185,39 @@ function renderPick() {
 }
 
 function setFrame(el, f) {
-  el.style.backgroundPosition = `${(f % 5) * 25}% ${f < 5 ? 0 : 100}%`;
+  const rows = Number(el.dataset.spriteRows || 2);
+  const frame = f % (rows * 5);
+  el.style.backgroundPosition = `${(frame % 5) * 25}% ${Math.floor(frame / 5) * (100 / (rows - 1))}%`;
 }
 
-// ═══ 布局算法：错落有致、不重叠、非卡片 ═══
-// 思路：N 人 → 均分横向槽位（保证最小间距）→ 前/后两个景深带交错分配
-//       （后带更高更小、前带更低更大）→ 每人加受限随机抖动 → 每局随机站位顺序
+function pingpong(t) {
+  const cycle = (SPRITE_FRAMES - 1) * 2;
+  const position = t % cycle;
+  return position < SPRITE_FRAMES ? position : cycle - position;
+}
+
+// ═══ 舞台布局：根据已校准背景的座位锚点安排角色与玩家 ═══
 function layoutChars(keepOrder = false) {
   const stage = $('#stage');
   if (!stage || !S.panel.length) return;
-  const W = stage.clientWidth;
-  const n = S.panel.length;
-  if (!keepOrder) S.order = [...S.panel].sort(() => Math.random() - 0.5);
-  const bands = [
-    { bottom: 30, scale: 0.78 },   // 后带
-    { bottom: 9,  scale: 1.0  },   // 前带
-  ];
-  const startBand = S.bandSeed ?? (S.bandSeed = Math.round(Math.random()));
-  const left = 14, right = 80;                      // 横向可用区间（%），右侧留出亭子
-  const step = n > 1 ? (right - left) / (n - 1) : 0;
-  S.order.forEach((id, i) => {
-    const band = bands[(i + startBand) % 2];
-    const jx = S.chars[id]?.jx ?? (Math.random() - 0.5) * Math.min(step * 0.35, 7);
-    const jy = S.chars[id]?.jy ?? (Math.random() - 0.5) * 5;
-    const x = n === 1 ? 50 : left + step * i + jx;
+  if (!keepOrder || !S.seatAssign) {
+    const seats = [...STAGE_SEATS.subsets[S.panel.length]].sort(() => Math.random() - 0.5);
+    S.order = [...S.panel].sort(() => Math.random() - 0.5);
+    S.seatAssign = { player: STAGE_SEATS.player };
+    S.order.forEach((id, index) => { S.seatAssign[id] = seats[index]; });
+  }
+  Object.entries(S.seatAssign).forEach(([id, seat]) => {
     const c = S.chars[id];
-    if (!c) return;
-    c.jx = jx; c.jy = jy;
-    c.x = Math.max(10, Math.min(84, x));
-    c.bottom = band.bottom + jy;
-    c.scale = band.scale;
-    c.el.style.left = c.x + '%';
-    c.el.style.bottom = c.bottom + '%';
-    c.el.style.zIndex = band.scale === 1 ? 6 : 3;
-    c.el.querySelector('.sprite').style.transform = `scale(${c.scale})`;
-    c.el.querySelector('.sprite').style.transformOrigin = 'bottom center';
+    const anchor = STAGE_SEATS.anchors[seat];
+    if (!c || !anchor) return;
+    const [x, bottom, scale] = anchor;
+    c.x = x; c.bottom = bottom; c.scale = scale;
+    c.el.style.left = x + '%';
+    c.el.style.bottom = bottom + '%';
+    c.el.style.zIndex = Math.round(scale * 10);
+    const sprite = c.el.querySelector('.sprite');
+    sprite.style.transform = `scale(${scale})`;
+    sprite.style.transformOrigin = 'bottom center';
   });
 }
 
@@ -211,7 +225,8 @@ function mountChars() {
   const wrap = $('#chars');
   wrap.innerHTML = '';
   S.chars = {};
-  S.panel.forEach((id) => {
+  S.seatAssign = null;
+  [...S.panel, 'player'].forEach((id) => {
     const c = CAST[id];
     const el = document.createElement('div');
     el.className = 'char dimmed';
@@ -219,9 +234,11 @@ function mountChars() {
       <div class="ground"></div>
       ${portrait(id, 'sprite idle-breathe')}
       <div class="tag"><span class="mic-ico">🎙</span><b style="color:${c.color}">${c.name}</b><i>${c.tag}</i></div>`;
-    el.onclick = () => cuePhilosopher(id);
+    if (id !== 'player') el.onclick = () => cuePhilosopher(id);
     wrap.appendChild(el);
     S.chars[id] = { el };
+    if (c.sprite) ['a', 'b', 'ia', 'ib'].forEach((version) => { new Image().src = SPRITE(id, version); });
+    setIdlePose(id);
   });
   S.bandSeed = null;
   layoutChars();
@@ -293,7 +310,6 @@ function setTheater(st, meta) {
   $('#tb-story').textContent = `第${S.storyIdx + 1}篇《${st.title}》· ${st.source}`;
   $('#slate-source').textContent = st.source;
   $('#slate-original').textContent = meta.original;
-  $('#slate-translation').textContent = meta.translation;
   $('#slate-tag').textContent = '当前议题';
   $('#slate-tag').classList.remove('upgraded');
   $('#slate-text').textContent = st.focal;
@@ -342,6 +358,7 @@ async function drainUser(st, circlePos) {
     const u = S.pendingUser; S.pendingUser = null;
     pushLine('user', '你', u.text);
     S.userLines.push(u.text);
+    await playerSay(u.text);
     invalidatePrefetch();
     const responders = u.target
       ? [u.target]
@@ -357,6 +374,17 @@ async function drainUser(st, circlePos) {
     }
   }
   return responded;
+}
+
+async function playerSay(text) {
+  if (!S.chars.player) return;
+  focusChar('player', true);
+  showBubble('player', text);
+  startAnim('player');
+  await sleep(Math.min(1300, Math.max(650, text.length * 45)));
+  stopAnim('player');
+  hideBubble();
+  focusChar('player', false);
 }
 
 // ═══ 单次发言（文本→动画+气泡+语音）═══
@@ -375,18 +403,21 @@ async function speak(id, st, opts = {}) {
   showThink(id, false);
   if (S.aborted || epoch !== S.turnEpoch || !turn) return;
 
-  // 预取下一位的台词+语音（无插话时才有效）
+  // 预取下一位的台词+语音（无插话时才有效）。未发言者不留下伪造台词，下一位回到当前情境重新开题。
   if (opts.prefetchNext && !S.pendingUser) {
     const next = opts.prefetchNext;
+    const nextIsAfterPass = turn.pass;
     S.prefetch[pfKey(next.id, S.transcript.length + 1)] = fetchTurn(
-      next.id, st, null, [...S.storyTranscript, { who: id, name: CAST[id].name, text: turn.text }], next.relation, next.replyTo,
+      next.id, st, null,
+      nextIsAfterPass ? S.storyTranscript : [...S.storyTranscript, { who: id, name: CAST[id].name, text: turn.text }],
+      nextIsAfterPass ? 'open_view' : next.relation,
+      nextIsAfterPass ? '当前情境（上一位未发言）' : next.replyTo,
     );
   }
 
-  recordRelationship(id, turn);
   if (turn.pass) {
     const actionText = `【${turn.action}】`;
-    pushLine(id, CAST[id].name, actionText);
+    pushLine(id, CAST[id].name, actionText, false);
     focusChar(id, true);
     showBubble(id, '……', turn.action, turn.address);
     startAnim(id);
@@ -397,6 +428,7 @@ async function speak(id, st, opts = {}) {
     return;
   }
 
+  recordRelationship(id, turn);
   pushLine(id, CAST[id].name, turn.text);
   focusChar(id, true);
   showBubble(id, turn.text, turn.action, turn.address);
@@ -404,11 +436,11 @@ async function speak(id, st, opts = {}) {
   $('#btn-interrupt').classList.add('on');
   S.interruptFlag = false;
 
-  if (S.voiceMode) {
+  if (canPlayAudio()) {
     let preparedAudio = null;
     try { preparedAudio = await (turn.audioPromise || fetchTTS(id, turn.text)); } catch {}
     if (S.aborted || epoch !== S.turnEpoch) return;
-    if (!S.voiceMode) await typewriterWait(turn.text);
+    if (!canPlayAudio()) await typewriterWait(turn.text);
     else if (preparedAudio && !S.interruptFlag && !S.aborted) await playAudio(preparedAudio);
     else await sleep(readTime(turn.text));
   } else {
@@ -475,15 +507,18 @@ async function fetchTurn(id, st, userText, transcriptOverride, relation, replyTo
     });
     if (!r.ok) throw new Error(await r.text());
     const turn = await r.json();
+    const speech = (turn.speech || '').trim();
+    const pass = Boolean(turn.pass) || !speech;
     return {
-      text: turn.speech || '', action: turn.action || '凝神不语', address: turn.address || null,
-      move: turn.move || 'build', pass: Boolean(turn.pass),
-      audioPromise: S.voiceMode && !turn.pass ? fetchTTS(id, turn.speech) : null,
+      // pass 时丢弃服务端可能返回的草稿，避免它被朗读或进入后续角色的上下文。
+      text: pass ? '' : speech, action: turn.action || '凝神不语', address: turn.address || null,
+      move: pass ? 'pass' : (turn.move || 'build'), pass,
+      audioPromise: canPlayAudio() && !pass ? fetchTTS(id, speech) : null,
     };
   } catch (e) {
     if (isAbort(e)) return null;
     console.error('turn failed', e);
-    return { text: `（${CAST[id].name}沉吟不语）` };
+    return { text: '', action: '沉吟不语', move: 'pass', pass: true };
   } finally {
     request.finish();
   }
@@ -544,6 +579,20 @@ function playAudio(prepared) {
   });
 }
 
+function canPlayAudio() { return !S.audioMuted; }
+
+function toggleMute() {
+  S.audioMuted = !S.audioMuted;
+  if (S.audio) { try { S.audio.pause(); } catch {} }
+  if (S.stopAudio) S.stopAudio();
+  if (S.audioMuted) cancelAudioRequests();
+  const btn = $('#btn-mute');
+  btn.querySelector('.audio-icon').textContent = S.audioMuted ? '🔇' : '🔊';
+  btn.querySelector('.audio-label').textContent = S.audioMuted ? '声音已关闭' : '声音开启';
+  btn.classList.toggle('muted', S.audioMuted);
+  btn.setAttribute('aria-pressed', String(S.audioMuted));
+}
+
 function readTime(text) { return Math.max(2200, text.length * 145); }
 
 async function typewriterWait(text) {
@@ -579,7 +628,7 @@ function prefetchHost(st, task, transcript = []) {
 
 async function prepareHostTurn(st, task, transcript) {
   const speech = await fetchHostTurn(st, task, transcript);
-  return speech ? { text: speech, audioPromise: S.voiceMode ? fetchHostTTS(speech) : null } : null;
+  return speech ? { text: speech, audioPromise: canPlayAudio() ? fetchHostTTS(speech) : null } : null;
 }
 
 async function fetchHostTurn(st, task, transcript) {
@@ -606,12 +655,15 @@ async function hostSay(text, audioPromise = null, epoch = S.turnEpoch) {
   if (S.aborted) return;
   pushLine('host', '主持人', text);
   const bannerVersion = showHostBanner(text);
-  if (S.voiceMode) {
+  if (canPlayAudio()) {
     let preparedAudio = null;
     try { preparedAudio = await (audioPromise || fetchHostTTS(text)); } catch {}
     if (S.aborted || epoch !== S.turnEpoch) return;
-    if (!S.voiceMode) await sleep(readTime(text) * 0.8);
-    else if (preparedAudio) await playAudio(preparedAudio);
+    if (!canPlayAudio()) await sleep(readTime(text) * 0.8);
+    else if (preparedAudio) {
+      await playAudio(preparedAudio);
+      if (S.audioMuted && !S.aborted && epoch === S.turnEpoch) await sleep(readTime(text) * 0.8);
+    }
     else await sleep(readTime(text) * 0.8);
   } else {
     await sleep(readTime(text) * 0.8);
@@ -816,13 +868,15 @@ function focusChar(id, on) {
 function startAnim(id) {
   stopAnim();
   const sp = S.chars[id].el.querySelector('.sprite');
+  if (CAST[id].sprite) setSpritePose(id, randomSpeakingPose());
   sp.classList.remove('idle-breathe');
+  const lastFrame = Number(sp.dataset.spriteRows || 2) * 5 - 1;
   let frame = 0;
   setFrame(sp, frame);
   S.animTimer = setInterval(() => {
     frame += 1;
     setFrame(sp, frame);
-    if (frame === 9) {
+    if (frame === lastFrame) {
       clearInterval(S.animTimer);
       S.animTimer = null;
       setFrame(sp, 0);
@@ -839,6 +893,11 @@ function stopAnim(id) {
     setFrame(sp, 0);
     sp.classList.add('idle-breathe');
   });
+  Object.keys(S.chars).forEach(setIdlePose);
+}
+
+function setIdlePose(id) {
+  if (CAST[id]?.sprite) setSpritePose(id, randomListeningPose());
 }
 
 function showBubble(id, text, action = '', address = null) {
@@ -849,7 +908,7 @@ function showBubble(id, text, action = '', address = null) {
   $('#bubble-name').textContent = CAST[id].name;
   $('#bubble-name').style.color = CAST[id].color;
   $('#bubble-meta').textContent = action;
-  $('#bubble-text').textContent = S.voiceMode ? text : '';
+  $('#bubble-text').textContent = canPlayAudio() ? text : '';
   b.classList.remove('interrupted');
   const left = Math.max(10, Math.min(charR.left - stageR.left + charR.width * 0.35, stageR.width - 360));
   const bottom = stageR.bottom - charR.top + 12;
@@ -871,9 +930,9 @@ function showThink(id, on) {
 }
 
 // ═══ 记录 ═══
-function pushLine(who, name, text) {
+function pushLine(who, name, text, includeInStory = true) {
   S.transcript.push({ who, name, text });
-  if (S.running && S.storyIdx < STORIES.length) S.storyTranscript.push({ who, name, text });
+  if (includeInStory && S.running && S.storyIdx < STORIES.length) S.storyTranscript.push({ who, name, text });
   $('#log-count').textContent = S.transcript.length;
   const d = document.createElement('div');
   d.className = 'dr-item' + (who === 'user' ? ' dr-user' : who === 'host' ? ' dr-host' : '');

@@ -32,6 +32,15 @@ SKILL_IDS = {"kongzi": "confucius"}
 VOICE_IDS = {"host": "moderator", "kongzi": "confucius"}
 GAME_RULES_PATH = GAME_DIR / "RULES.md"
 SOCIAL_MOVES = {"build", "challenge", "ally", "tease", "question", "pass"}
+FIRST_PERSON_MARKERS = ("我", "咱", "要我说", "轮到我", "落在我身上")
+PLAYER_QUESTION_OPENERS = ("你", "您", "大家", "该怎么", "怎样", "如何", "是否")
+REFUSAL_PATTERN = re.compile(
+    r"Claude|克劳德|AI\s*助手|人工智能|语言模型|大模型|作为(一个)?(AI|助手|人工智能)"
+    r"|无法(扮演|假扮|提供|回答)|不能(扮演|假扮)|抱歉[，,]我|I('m| am)\s+(an?\s+)?(AI|assistant)"
+    r"|as an AI|cannot (role-?play|pretend)|Anthropic|OpenAI"
+    r"|请提供.*(?:前一位|上一位).*(?:发言|内容)|我需要.*(?:对话记录|前一位|上一位)",
+    re.IGNORECASE,
+)
 HOST_TASKS = {
     "intro": "以故事情境打开讨论，点出核心张力，不替玩家作答。",
     "cue": "接住刚才一两句具体观点，邀请玩家说出自己的理由或犹豫。",
@@ -44,6 +53,11 @@ HOST_FALLBACKS = {
     "escalation": "host_escalation_line",
     "outro": "host_outro",
 }
+INTRO_OPENERS = (
+    "先别急着选边。让我们从{source}的一段对话说起。",
+    "这段话不长，落到自己身上却未必好答。我们来看{source}。",
+    "有些道理读起来简单，一旦进了具体处境，就没那么轻松。{source}里有这样一段对话。",
+)
 RELATION_INSTRUCTIONS = {
     "open_view": "先从自己的立场切入，但必须回应当前情境中的一个具体细节。",
     "reconsider": "在换角度后重新审视此前立场，指出它需要承受的新压力。",
@@ -233,6 +247,20 @@ def _normalized_address(address: object, panel: list[str]) -> str | None:
     return None
 
 
+def _is_refusal(content: str) -> bool:
+    """Reject upstream role-play refusals before JSON validation."""
+    return bool(REFUSAL_PATTERN.search(content))
+
+
+def _fallback_turn(user_text: str | None) -> dict:
+    """Keep the round moving when the upstream model cannot produce a valid turn."""
+    if user_text:
+        speech = "你已经说出了取舍；接下来要承担哪一种代价？"
+    else:
+        speech = "先把这件事的代价说清，再决定该站在哪边。"
+    return {"speech": speech, "action": "略作沉思", "address": None, "move": "question", "pass": False}
+
+
 def _validated_turn(content: str, panel: list[str], user_text: str | None) -> dict:
     match = re.search(r"\{.*\}", content, re.S)
     payload = json.loads(match.group(0) if match else content)
@@ -302,19 +330,20 @@ def _validated_host_speech(content: str) -> str:
 
 
 def _opening_speech(story: dict) -> str:
-    """Return the reviewed text verbatim before the opening discussion question."""
-    return (
-        f"《{story['title']}》·{story['source']}。\n"
-        f"原文：{story['original']}\n"
-        f"译文：{story['translation']}\n"
-        f"请想一想：{story['focal']}"
-    )
+    """Introduce each Analects passage without inventing a second, modern story."""
+    story_number = int(str(story["id"]).removeprefix("s"))
+    opener = INTRO_OPENERS[(story_number - 1) % len(INTRO_OPENERS)].format(source=story["source"])
+    parts = [opener, story["translation"]]
+    if story.get("opening_mode") == "supplemental" and story.get("scene"):
+        parts.append(f"先看一个小小的同行画面。{story['scene']}")
+    parts.append(f"那么，{story['focal']}")
+    return "\n".join(parts)
 
 
 def _suggestion_prompt(story_id: str, escalated: bool, transcript: list[dict], attempt: int) -> str:
     story = STORIES[story_id]
     focus = story["escalation"] if escalated else story["focal"]
-    retry = "上一版格式或观点不符合要求，请严格重写。" if attempt else ""
+    retry = "上一版不合格：三条都没有明确的玩家第一人称。重写时每条必须包含“我”或“咱”，但不必放在句首。" if attempt else ""
     return f"""你是《问道·未竟的论语》的玩家发言建议助手，只为玩家提供思考起点，不替他作答。
 
 【本篇审核资料】
@@ -326,7 +355,13 @@ def _suggestion_prompt(story_id: str, escalated: bool, transcript: list[dict], a
 {_dialogue_context(transcript)}
 {retry}
 
-生成三个彼此对立、有张力、可直接作为玩家发言开头的观点：一个偏向关系或同情，一个偏向原则或责任，一个提出反直觉的追问。每条不超过36字，不要杜撰原文或历史事实，不评价对错。
+生成三个彼此对立、有张力、可直接点击发送的玩家发言：一个偏向关系或同情，一个偏向原则或责任，一个提出反直觉的第三种选择。
+
+每条必须是玩家本人会说的话，而不是旁观评论。硬性格式：每条都必须包含“我”或“咱”至少一次，但不要求放在句首；例如“先把羊还了，我再陪父亲去认错”“要我说，亲情不能替偷窃开脱”。可以对在场角色说“你”，但不能把问题抛给玩家，不能写成“你会怎么选”“该怎么做”。第三条也必须是一个选择或行动，不要写成问题。
+
+风格必须有趣、尖锐、简单易懂，像玩家在圆桌上自然插话：优先用具体细节、反问或带转折的短判断；可以有一点调侃，但不刻薄。每条 12–28 个汉字，口语化，不解释推理。
+
+禁止使用“首先”“应该”“本质上”“从某种意义上”“我们需要”“这体现了”等说教套话；不要杜撰原文或历史事实，不评价对错。
 
 只输出合法 JSON：{{"suggestions":["观点一","观点二","观点三"]}}。"""
 
@@ -338,7 +373,13 @@ def _validated_suggestions(content: str) -> list[str]:
     if not isinstance(suggestions, list) or len(suggestions) != 3:
         raise ValueError("invalid suggestions")
     cleaned = [" ".join(str(item).split()).strip() for item in suggestions]
-    if any(not item or len(item) > 36 for item in cleaned) or len(set(cleaned)) != 3:
+    if any(
+        len(item) < 12
+        or len(item) > 28
+        or item.startswith(PLAYER_QUESTION_OPENERS)
+        or item.endswith(("？", "?"))
+        for item in cleaned
+    ) or len(set(cleaned)) != 3:
         raise ValueError("invalid suggestion content")
     return cleaned
 
@@ -372,13 +413,15 @@ def game_turn(payload: dict) -> dict:
             }, operation="philosopher_llm")
             data = json.loads(raw)
             content = data["choices"][0]["message"]["content"] or ""
+            if _is_refusal(content):
+                raise ValueError("upstream refusal")
             result = _validated_turn(content, panel, user_text)
             log_game_latency("game_turn", persona=persona_id, story=story_id, attempt=attempt + 1, fallback=False, elapsed_ms=round((time.perf_counter() - started) * 1000))
             return result
         except Exception as exc:
             LOGGER.warning("Philosopher validation failed agent=%s attempt=%s error=%s", persona_id, attempt + 1, type(exc).__name__)
     log_game_latency("game_turn", persona=persona_id, story=story_id, attempt=3, fallback=True, elapsed_ms=round((time.perf_counter() - started) * 1000))
-    return {"speech": "这个问题值得慢些想。", "action": "凝神不语", "address": None, "move": "question", "pass": False}
+    return _fallback_turn(user_text)
 
 
 @router.post("/api/game/host")
@@ -493,7 +536,7 @@ def game_report(payload: dict) -> dict:
 - 常变轴：守常（礼）0 ←→ 100 达变（化）
 
 要求：依据玩家自己说过的话打分和写评语，评语中必须引用玩家原话；诚实指出他立场里的矛盾（这是最有价值的部分）；不吹捧。若玩家一言未发，四轴都给 50，把画像颁给老子，理由是「知者不言」，写得幽默些。
-match 必须是以下十二位之一：孔子、苏格拉底、韩非子、康德、老子、庄子、亚里士多德、墨子、尼采、柏拉图、萨特、王阳明。
+match 必须是以下十三位之一：孔子、苏格拉底、韩非子、康德、老子、庄子、亚里士多德、墨子、尼采、柏拉图、萨特、王阳明、第欧根尼。
 
 只输出 JSON：
 {{"axes":[{{"name":"情理轴","left":"重情","right":"重法","value":50}},...共4条],"match":"哲学家名","title":"四字称号","text":"3-4句白话画像正文","quote":"送玩家的一句该哲学家真实原文（附出处）"}}"""
@@ -514,7 +557,7 @@ match 必须是以下十二位之一：孔子、苏格拉底、韩非子、康�
 
 @router.get("/game")
 def game_page() -> FileResponse:
-    return FileResponse(STATIC_DIR / "game" / "index.html")
+    return FileResponse(STATIC_DIR / "game" / "index.html", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/sprites-review")
@@ -525,3 +568,18 @@ def sprites_review() -> FileResponse:
 @router.get("/voices-review")
 def voices_review() -> FileResponse:
     return FileResponse(STATIC_DIR / "voices-review.html")
+
+
+@router.get("/roster-review")
+def roster_review() -> FileResponse:
+    return FileResponse(STATIC_DIR / "roster-review.html")
+
+
+@router.get("/bg-review")
+def bg_review() -> FileResponse:
+    return FileResponse(STATIC_DIR / "bg-review.html")
+
+
+@router.get("/seats-review")
+def seats_review() -> FileResponse:
+    return FileResponse(STATIC_DIR / "seats-review.html")
