@@ -78,10 +78,14 @@ const S = {
   cuePaused: false,
   interruptFlag: false,
   audioMuted: false,
+  bgm: null,
+  bgmFadeFrame: null,
   running: false,
   aborted: false,
   paused: false,
   pauseWaiters: [],
+  inputHold: false,
+  flowWaiters: [],
   audio: null,
   stopAudio: null,
   animTimer: null,
@@ -90,6 +94,7 @@ const S = {
   requestControllers: new Set(),
   audioRequestControllers: new Set(),
   hostBannerVersion: 0,
+  suggestionToken: 0,
   turnEpoch: 0,
   chars: {},            // id → {el, x, bottom, scale}
   seatAssign: null,
@@ -97,6 +102,9 @@ const S = {
 
 // ═══ 启动 ═══
 async function boot() {
+  // 首页即尝试播放；若浏览器禁止自动播放，首次点击会解锁同一段全站 BGM。
+  startBgm();
+  document.addEventListener('pointerdown', startBgm, { once: true });
   try {
     const r = await fetch('/api/game/stories');
     STORY_META = await r.json();
@@ -110,7 +118,9 @@ async function boot() {
   $('#btn-start-game').onclick = startGame;
   $('#btn-send').onclick = submitUser;
   $('#user-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitUser(); });
-  $('#user-input').addEventListener('input', pauseCueForInput);
+  $('#user-input').addEventListener('focus', holdFlowForInput);
+  $('#user-input').addEventListener('input', holdFlowForInput);
+  $('#user-input').addEventListener('blur', releaseFlowOnBlur);
   $('#btn-interrupt').onclick = doInterrupt;
   $('#btn-pause').onclick = togglePause;
   $('#btn-log').onclick = () => $('#drawer').classList.add('open');
@@ -119,7 +129,7 @@ async function boot() {
   $('#btn-original').onclick = () => $('#modal-original').classList.add('open');
   $('#btn-orig-close').onclick = () => $('#modal-original').classList.remove('open');
   $('#btn-mute').onclick = toggleMute;
-  $('#btn-skip-cue').onclick = () => { S.cueSkip = true; };
+  $('#btn-skip-cue').onclick = () => { S.cueSkip = true; setInputHold(false); };
   setupMic();
   window.addEventListener('resize', () => layoutChars(true));
 
@@ -264,32 +274,30 @@ async function startGame() {
   $('#btn-pause').textContent = '⏸ 暂停';
   show('#screen-table');
   mountChars();
+  startBgm();
   runGame().catch((e) => console.error(e));
 }
 
 async function runGame() {
   for (S.storyIdx = 0; S.storyIdx < STORIES.length && !S.aborted; S.storyIdx++) {
-    await waitIfPaused();
+    await waitForFlow();
     const st = STORIES[S.storyIdx];
     const meta = STORY_META.stories.find((x) => x.id === st.id);
     S.escalated = false;
     S.storyTranscript = [];
     S.relationshipLedger = { recent: [] };
     setTheater(st, meta);
-    refreshSuggestions(st);
+    refreshSuggestions(st, 'source');
 
     await hostSpeak(st, 'intro', meta.host_intro);
     if (STORIES[S.storyIdx + 1]) prefetchHost(STORIES[S.storyIdx + 1], 'intro');
     await circle(st, meta);                      // 第一圈
     if (S.aborted) break;
-    refreshSuggestions(st);
     await userWindow(st, meta);                  // cue 玩家
     if (S.aborted) break;
     S.escalated = true;                          // 议题升级
     slateUpgrade(meta);
-    refreshSuggestions(st);
-    await hostSpeak(st, 'escalation', meta.host_escalation_line);
-    await circle(st, meta);                      // 第二圈
+    await circle(st, meta);                      // 深入讨论：角色直接承接升级议题
     if (S.aborted) break;
     await hostSpeak(st, 'outro', meta.host_outro);
     const nextStory = STORIES[S.storyIdx + 1];
@@ -300,14 +308,14 @@ async function runGame() {
 
 async function showStoryTransition(nextStory) {
   const transition = $('#story-transition');
-  transition.textContent = `本篇讨论结束，正在进入下一篇《${nextStory.title}》`;
+  transition.textContent = `本篇讨论结束，正在进入${nextStory.source}`;
   transition.classList.add('on');
   await sleep(3000);
   transition.classList.remove('on');
 }
 
 function setTheater(st, meta) {
-  $('#tb-story').textContent = `第${S.storyIdx + 1}篇《${st.title}》· ${st.source}`;
+  $('#tb-story').textContent = `第${S.storyIdx + 1}篇 ${st.source}`;
   $('#slate-source').textContent = st.source;
   $('#slate-original').textContent = meta.original;
   $('#slate-tag').textContent = '当前议题';
@@ -329,7 +337,7 @@ function slateUpgrade(meta) {
 // 一圈轮流发言；圈中随时可被玩家插话打断
 async function circle(st, meta) {
   for (let i = 0; i < S.order.length && !S.aborted; i++) {
-    await waitIfPaused();
+    await waitForFlow();
     const id = S.order[i];
     // 圈位边界处理插话；若正好是本位答的玩家，就算他这一轮已发言
     const responded = await drainUser(st, i);
@@ -354,7 +362,7 @@ async function circle(st, meta) {
 async function drainUser(st, circlePos) {
   const responded = new Set();
   while (S.pendingUser && !S.aborted) {
-    await waitIfPaused();
+    await waitForFlow();
     const u = S.pendingUser; S.pendingUser = null;
     pushLine('user', '你', u.text);
     S.userLines.push(u.text);
@@ -392,7 +400,7 @@ async function speak(id, st, opts = {}) {
   const c = S.chars[id];
   if (!c) return;
   const epoch = S.turnEpoch;
-  await waitIfPaused();
+  await waitForFlow();
   showThink(id, true);
 
   let turn;
@@ -492,12 +500,14 @@ function isAbort(error) { return error?.name === 'AbortError'; }
 async function fetchTurn(id, st, userText, transcriptOverride, relation, replyTo) {
   const request = requestOptions();
   try {
+    const turnTranscript = transcriptOverride || S.storyTranscript;
     const r = await fetch('/api/game/turn', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       signal: request.signal,
       body: JSON.stringify({
         persona: id, story: st.id, escalated: S.escalated,
-        transcript: (transcriptOverride || S.storyTranscript).slice(-14),
+        transcript: turnTranscript.slice(-14),
+        speaker_history: turnTranscript.filter((item) => item.who === id).slice(-3),
         user_text: userText || null,
         relation: relation || (userText ? 'direct_response' : 'open_view'),
         reply_to: replyTo || (userText ? '玩家' : '当前情境'),
@@ -564,6 +574,7 @@ function playAudio(prepared) {
   return new Promise((resolve) => {
     const { audio, url } = prepared;
     S.audio = audio;
+    duckBgm();
     let finished = false;
     const finish = () => {
       if (finished) return;
@@ -571,6 +582,7 @@ function playAudio(prepared) {
       if (S.audio === audio) S.audio = null;
       if (S.stopAudio === finish) S.stopAudio = null;
       URL.revokeObjectURL(url);
+      restoreBgm();
       resolve();
     };
     S.stopAudio = finish;
@@ -581,11 +593,49 @@ function playAudio(prepared) {
 
 function canPlayAudio() { return !S.audioMuted; }
 
+function startBgm() {
+  if (!S.bgm) {
+    S.bgm = new Audio('/static/assets/audio/analects-calm-bgm.wav?v=20260810');
+    S.bgm.loop = true;
+    S.bgm.preload = 'auto';
+    S.bgm.volume = 0;
+  }
+  if (!canPlayAudio()) return;
+  S.bgm.play().then(() => setBgmVolume(0.1, 650)).catch(() => {});
+}
+
+function setBgmVolume(target, duration = 350) {
+  if (!S.bgm) return;
+  if (S.bgmFadeFrame) cancelAnimationFrame(S.bgmFadeFrame);
+  const from = S.bgm.volume;
+  const started = performance.now();
+  const tick = (now) => {
+    const progress = Math.min(1, (now - started) / duration);
+    S.bgm.volume = from + (target - from) * progress;
+    if (progress < 1) S.bgmFadeFrame = requestAnimationFrame(tick);
+    else S.bgmFadeFrame = null;
+  };
+  S.bgmFadeFrame = requestAnimationFrame(tick);
+}
+
+function duckBgm() { if (canPlayAudio()) setBgmVolume(0.035, 180); }
+function restoreBgm() { if (canPlayAudio() && !S.paused) setBgmVolume(0.1, 550); }
+function stopBgm() {
+  if (!S.bgm) return;
+  if (S.bgmFadeFrame) cancelAnimationFrame(S.bgmFadeFrame);
+  S.bgm.pause();
+  S.bgm.currentTime = 0;
+  S.bgm.volume = 0;
+}
+
 function toggleMute() {
   S.audioMuted = !S.audioMuted;
   if (S.audio) { try { S.audio.pause(); } catch {} }
   if (S.stopAudio) S.stopAudio();
-  if (S.audioMuted) cancelAudioRequests();
+  if (S.audioMuted) {
+    cancelAudioRequests();
+    if (S.bgm) S.bgm.pause();
+  } else startBgm();
   const btn = $('#btn-mute');
   btn.querySelector('.audio-icon').textContent = S.audioMuted ? '🔇' : '🔊';
   btn.querySelector('.audio-label').textContent = S.audioMuted ? '声音已关闭' : '声音开启';
@@ -610,12 +660,14 @@ async function typewriterWait(text) {
 // ═══ 主持人 ═══
 async function hostSpeak(st, task, fallback) {
   const epoch = S.turnEpoch;
-  await waitIfPaused();
+  await waitForFlow();
   const key = hostKey(st, task);
   const prepared = S.hostPrefetch[key] ? await S.hostPrefetch[key] : await prepareHostTurn(st, task, S.storyTranscript);
   delete S.hostPrefetch[key];
-  if (S.aborted || epoch !== S.turnEpoch) return;
-  await hostSay(prepared?.text || fallback, prepared?.audioPromise, epoch);
+  if (S.aborted || epoch !== S.turnEpoch) return null;
+  const text = prepared?.text || fallback;
+  await hostSay(text, prepared?.audioPromise, epoch);
+  return text;
 }
 
 function hostKey(st, task) { return `${st.id}|${task}`; }
@@ -706,7 +758,8 @@ async function fetchHostTTS(text) {
 
 // cue 玩家：倒计时窗口
 async function userWindow(st, meta) {
-  await hostSpeak(st, 'cue', meta.host_user_cue);
+  const cueQuestion = await hostSpeak(st, 'cue', meta.host_user_cue);
+  refreshSuggestions(st, 'host_question', cueQuestion);
   const cueEl = $('#user-cue');
   cueEl.classList.add('on');
   S.cueActive = true;
@@ -716,7 +769,7 @@ async function userWindow(st, meta) {
   for (let t = 12; t > 0;) {
     $('#cue-count').textContent = t;
     if (S.pendingUser || S.cueSkip || S.aborted) break;
-    if (S.cuePaused || S.paused) {
+    if (S.cuePaused || S.paused || S.inputHold) {
       await sleep(200);
       continue;
     }
@@ -728,10 +781,22 @@ async function userWindow(st, meta) {
   await drainUser(st, 0);
 }
 
-function pauseCueForInput() {
-  if (!S.cueActive || !$('#user-input').value.trim()) return;
-  S.cuePaused = true;
-  $('#user-cue').classList.remove('on');
+function holdFlowForInput() {
+  if (!S.running || S.aborted) return;
+  setInputHold(true);
+  if (S.cueActive && $('#user-input').value.trim()) {
+    S.cuePaused = true;
+    $('#user-cue').classList.remove('on');
+  }
+}
+
+function releaseFlowOnBlur() {
+  if (!$('#user-input').value.trim() && !S.pendingUser) setInputHold(false);
+}
+
+function setInputHold(active) {
+  S.inputHold = active;
+  if (!active) S.flowWaiters.splice(0).forEach((resolve) => resolve());
 }
 
 // ═══ 插话 / 打断 ═══
@@ -740,6 +805,7 @@ function submitUser() {
   const text = inp.value.trim();
   if (!text || !S.running) return;
   inp.value = '';
+  setInputHold(false);
   let target = S.cueTarget;
   const m = text.match(/^@(\S{1,5})[\s，,：:]*/);
   if (m) {
@@ -777,11 +843,14 @@ function togglePause() {
   $('#btn-pause').textContent = S.paused ? '▶ 继续' : '⏸ 暂停';
   if (S.paused) {
     if (S.audio && !S.audio.paused) S.audio.pause();
+    if (S.bgm && !S.bgm.paused) S.bgm.pause();
     return;
   }
   if (S.audio?.paused) S.audio.play().catch(() => {});
+  if (S.bgm && canPlayAudio()) S.bgm.play().catch(() => {});
   const waiters = S.pauseWaiters.splice(0);
   waiters.forEach((resolve) => resolve());
+  S.flowWaiters.splice(0).forEach((resolve) => resolve());
 }
 
 async function waitIfPaused() {
@@ -790,9 +859,16 @@ async function waitIfPaused() {
   }
 }
 
-async function refreshSuggestions(st) {
+async function waitForFlow() {
+  while ((S.paused || S.inputHold) && !S.aborted) {
+    await new Promise((resolve) => S.flowWaiters.push(resolve));
+  }
+}
+
+async function refreshSuggestions(st, phase = 'source', hostQuestion = '') {
   const list = $('#suggestion-list');
   const storyId = st.id;
+  const token = ++S.suggestionToken;
   const request = requestOptions();
   list.replaceChildren(Object.assign(document.createElement('span'), {
     className: 'suggestion-loading', textContent: '正在准备三个不同的角度…',
@@ -802,12 +878,12 @@ async function refreshSuggestions(st) {
       method: 'POST', headers: { 'content-type': 'application/json' },
       signal: request.signal,
       body: JSON.stringify({
-        story: storyId, escalated: S.escalated, transcript: S.storyTranscript.slice(-14),
+        story: storyId, phase, host_question: hostQuestion || null, transcript: S.storyTranscript.slice(-14),
       }),
     });
     if (!r.ok) throw new Error(await r.text());
     const { suggestions } = await r.json();
-    if (S.aborted || STORIES[S.storyIdx]?.id !== storyId) return;
+    if (S.aborted || token !== S.suggestionToken || STORIES[S.storyIdx]?.id !== storyId) return;
     list.replaceChildren();
     (suggestions || []).forEach((text) => {
       const button = document.createElement('button');
@@ -817,13 +893,13 @@ async function refreshSuggestions(st) {
       button.onclick = () => {
         $('#user-input').value = text;
         $('#user-input').focus();
-        pauseCueForInput();
+        holdFlowForInput();
       };
       list.appendChild(button);
     });
   } catch (e) {
     if (!isAbort(e)) console.error('suggestions failed', e);
-    if (STORIES[S.storyIdx]?.id === storyId) list.replaceChildren();
+    if (token === S.suggestionToken && STORIES[S.storyIdx]?.id === storyId) list.replaceChildren();
   } finally {
     request.finish();
   }
@@ -947,12 +1023,18 @@ async function endMeeting() {
   S.aborted = true;
   S.paused = false;
   S.pauseWaiters.splice(0).forEach((resolve) => resolve());
+  S.flowWaiters.splice(0).forEach((resolve) => resolve());
   if (S.audio) { try { S.audio.pause(); } catch {} }
+  if (S.stopAudio) S.stopAudio();
   showReport();
 }
 
 async function showReport() {
   S.running = false;
+  if (canPlayAudio()) {
+    startBgm();
+    setBgmVolume(0.1, 450);
+  }
   show('#screen-report');
   const wrap = $('#report-wrap');
   wrap.innerHTML = '<p class="report-loading">主持人正在为你写终局报告…</p>';
