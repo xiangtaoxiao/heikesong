@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>音色审阅 · 稷下</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f6f2e8; color: #2f3430; font-family: "Songti SC","STSong",serif; padding: 36px 6vw 60px; }
+h1 { font-size: 26px; letter-spacing: 6px; }
+h2 { font-size: 17px; letter-spacing: 3px; margin: 34px 0 6px; color: #3d5940; }
+.sub { color: #6f6f63; font-size: 13px; margin: 8px 0 4px; line-height: 1.8; }
+.line { display: inline-block; background: #fbf8f0; border: 1px solid #ddd5c2; border-radius: 8px;
+  padding: 6px 14px; font-size: 14px; margin-top: 6px; }
+.row { display: flex; align-items: center; gap: 16px; background: #fbf8f0; border: 1px solid #ddd5c2;
+  border-radius: 12px; padding: 12px 18px; margin-top: 12px; }
+.row.playing { border-color: #3d5940; box-shadow: 0 0 0 2px rgba(61,89,64,.15); }
+.avatar { width: 54px; height: 90px; background-size: 500% 200%; background-position: 0 0; flex-shrink: 0; }
+.who { width: 150px; }
+.who b { font-size: 17px; display: block; }
+.who span { font-size: 12px; color: #6f6f63; }
+.conf { flex: 1; font-size: 12.5px; color: #6f6f63; line-height: 1.7; }
+.conf code { background: #efe9da; border-radius: 4px; padding: 1px 7px; font-size: 12px; font-family: Menlo, monospace; }
+.play { width: 46px; height: 46px; border-radius: 50%; border: none; background: #3d5940; color: #fff;
+  font-size: 16px; cursor: pointer; flex-shrink: 0; }
+.play:hover { background: #5c7a5e; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-top: 12px; }
+.vcard { display: flex; align-items: center; justify-content: space-between; background: #fbf8f0;
+  border: 1px solid #ddd5c2; border-radius: 10px; padding: 10px 14px; }
+.vcard.inuse { border-color: #c26b4a; }
+.vcard b { font-size: 14px; }
+.vcard span { display: block; font-size: 11px; color: #a9a390; margin-top: 2px; }
+.vcard .play { width: 36px; height: 36px; font-size: 13px; }
+.hint { margin-top: 26px; font-size: 12.5px; color: #6f6f63; background: #fbf8f0; border-left: 3px solid #c26b4a;
+  border-radius: 6px; padding: 10px 16px; line-height: 1.9; }
+</style>
+</head>
+<body>
+<h1>音色审阅页</h1>
+<div class="sub">TTS：<b>qwen3-tts-flash</b>（走主办方 openai-next 代理）· 每人独立音色+语速，配置在 <b>backend/config/game/personas.json</b></div>
+<div class="line">🔊 统一台词：「一只羊走进了院子。你说，这个儿子做对了吗？」</div>
+
+<h2>① 当前配置 · 七个角色同一句话</h2>
+<div id="cast"></div>
+
+<h2>② 备选音色池 · 代理上实测可用的全部 21 个</h2>
+<div class="sub">短句试听：「直，究竟是什么？」——听到合适的，把名字填进 personas.json 的 voice 字段即可。<br>
+标 <b style="color:#31548c">洋</b> 的是 Qwen 的国际音色（母语非中文），说中文自带外国腔——<b>给苏格拉底/康德优先试这几个</b>。</div>
+<div class="grid" id="pool"></div>
+
+<div class="hint">
+换音色三步：① 下方试听选中意的名字 → ② 改 <b>personas.json</b> 里对应角色的 <code>"voice"</code>（可顺带调 <code>"tts_speed"</code>，0.85=慢 1.05=快）→ ③ 重启后端即生效，无需改代码。
+</div>
+
+<script>
+const CAST = [
+  ['kongzi','孔子','Elias','0.92','沉稳长者——判词要有分量，配最稳的男声，压慢'],
+  ['socrates','苏格拉底','Marcus','1.0','低沉思辨——一直在提问，声音要"缠人"'],
+  ['hanfeizi','韩非子','Ryan','1.05','冷峻利落——结论先行，语速略快像念卷宗'],
+  ['kant','康德','Ethan','0.95','清晰标准——措辞精确，一字一顿的书面感'],
+  ['laozi','老子','Li','0.85','轻缓空灵——全场话最少，慢到近乎停顿'],
+  ['zhuangzi','庄子','Dylan','1.0','京腔洒脱——说书人气质，带点玩世的松弛'],
+  ['host','主持人','Serena','1.0','温和女声——串场引导，不抢戏'],
+];
+const POOL = ['Ethan','Dylan','Marcus','Elias','Ryan','Peter','Rocky','Li','Nofish','Serena','Chelsie','Sunny','Jada','Katerina',
+              'Cherry','Jennifer','Kiki','Eric','Momo','Bella','Andre'];
+const FOREIGN = new Set(['Jennifer','Katerina','Andre','Eric','Bella']);   // 国际音色：说中文带外国腔（候选，以试听为准）
+const INUSE = new Set(CAST.map(c => c[2]));
+let cur = null;
+function play(src, el) {
+  if (cur) { cur.a.pause(); cur.el.classList.remove('playing'); }
+  const a = new Audio(src);
+  cur = { a, el };
+  el.classList.add('playing');
+  a.onended = () => { el.classList.remove('playing'); cur = null; };
+  a.play();
+}
+const cast = document.getElementById('cast');
+CAST.forEach(([id, name, voice, speed, why]) => {
+  const d = document.createElement('div');
+  d.className = 'row';
+  d.innerHTML = `
+    ${id !== 'host' ? `<div class="avatar" style="background-image:url('/static/assets/sprites/${id}.png')"></div>` : '<div class="avatar" style="display:flex;align-items:center;justify-content:center;font-size:30px">🎙</div>'}
+    <div class="who"><b>${name}</b><span>voice: ${voice} · speed ${speed}</span></div>
+    <div class="conf">${why}</div>
+    <button class="play">▶</button>`;
+  d.querySelector('.play').onclick = () => play(`/static/assets/audio/line-${id}.wav`, d);
+  cast.appendChild(d);
+});
+const pool = document.getElementById('pool');
+POOL.forEach((v) => {
+  const d = document.createElement('div');
+  d.className = 'vcard' + (INUSE.has(v) ? ' inuse' : '');
+  d.innerHTML = `<div><b>${v}${FOREIGN.has(v) ? ' <i style="font-style:normal;color:#31548c;font-size:11px">洋</i>' : ''}</b><span>${INUSE.has(v) ? '✓ 已在使用' : '备选'}</span></div><button class="play">▶</button>`;
+  d.querySelector('.play').onclick = () => play(`/static/assets/audio/voice-${v}.wav`, d);
+  pool.appendChild(d);
+});
+</script>
+</body>
+</html>
