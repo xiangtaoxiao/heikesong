@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>稷下 · 论语圆桌</title>
-<link rel="stylesheet" href="/static/game/game.css">
+<link rel="stylesheet" href="/static/game/game.css?v=20260810-voice2">
 </head>
 <body>
 
@@ -48,7 +48,9 @@
       <span class="tb-story" id="tb-story"></span>
     </div>
     <div class="tb-right">
-      <button class="tb-btn" id="btn-mute" aria-pressed="false" title="关闭所有角色与主持人的播放声音">🔊 全员静音</button>
+      <button class="audio-control" id="btn-mute" aria-pressed="false" title="关闭所有角色与主持人的播放声音">
+        <span class="audio-icon">🔊</span><span class="audio-label">声音开启</span>
+      </button>
       <button class="tb-btn" id="btn-log">📜 对话记录 <b id="log-count">0</b></button>
       <button class="tb-btn tb-leave" id="btn-leave">结束会议</button>
     </div>
@@ -114,6 +116,6 @@
   </div>
 </section>
 
-<script src="/static/game/game.js"></script>
+<script src="/static/game/game.js?v=20260810-voice2"></script>
 </body>
 </html>

@@ -82,6 +82,13 @@ button { font-family: var(--serif); cursor: pointer; }
   border-radius: 8px; color: var(--ink); }
 .tb-btn:hover { border-color: var(--sage); }
 .tb-leave { color: var(--terra); }
+.audio-control { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; padding: 5px 12px 5px 6px;
+  border: 1px solid var(--line); border-radius: 9px; background: var(--paper); color: var(--ink); font-size: 13px; }
+.audio-control:hover { border-color: var(--sage); }
+.audio-icon { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: var(--sage-deep); color: #fff; font-size: 12px; }
+.audio-label { letter-spacing: .6px; }
+.audio-control.muted .audio-icon { background: var(--terra); }
+.audio-control.muted .audio-label { color: var(--terra); }
 
 .table-main { flex: 1; display: flex; min-height: 0; }
 

@@ -305,17 +305,17 @@ async function runGame() {
       warmTTS('host', meta.host_escalation_line);
       warmTTS('host', meta.host_outro);
     }
-    S.prefetch[pfKey(S.order[0])] = fetchTurn(S.order[0], st, null);   // 预取第一位发言
-
     await hostSay(meta.host_intro);
+    // 首位角色也必须听过主持人开场；从这里开始才预取，避免第一轮脱离上下文。
+    S.prefetch[pfKey(S.order[0])] = fetchTurn(S.order[0], st, null);
     await circle(st, meta);                      // 第一圈
     if (S.aborted) break;
     await userWindow(meta.host_user_cue, st);    // cue 玩家
     if (S.aborted) break;
     S.escalated = true;                          // 议题升级
-    S.prefetch[pfKey(S.order[0])] = fetchTurn(S.order[0], st, null);
     slateUpgrade(meta);
     await hostSay(meta.host_escalation_line);
+    S.prefetch[pfKey(S.order[0])] = fetchTurn(S.order[0], st, null);
     await circle(st, meta);                      // 第二圈
     if (S.aborted) break;
     await hostSay(meta.host_outro);
@@ -448,7 +448,7 @@ async function fetchTurn(id, st, userText, transcriptOverride) {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         persona: id, story: st.id, escalated: S.escalated,
-        transcript: (transcriptOverride || S.transcript).slice(-14),
+        transcript: transcriptOverride || S.transcript,
         user_text: userText || null,
       }),
     });
@@ -490,7 +490,9 @@ function toggleMute() {
   S.audioMuted = !S.audioMuted;
   if (S.audioMuted && S.audio) { try { S.audio.pause(); } catch {} S.audio = null; }
   const btn = $('#btn-mute');
-  btn.textContent = S.audioMuted ? '🔇 已静音' : '🔊 全员静音';
+  btn.querySelector('.audio-icon').textContent = S.audioMuted ? '🔇' : '🔊';
+  btn.querySelector('.audio-label').textContent = S.audioMuted ? '声音已关闭' : '声音开启';
+  btn.classList.toggle('muted', S.audioMuted);
   btn.setAttribute('aria-pressed', String(S.audioMuted));
 }
 

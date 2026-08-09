@@ -43,25 +43,25 @@ REFUSAL_PAT = re.compile(
 # 只要上游模型出戏、超时或通道未配置，游戏也必须让角色继续说话。这里的短台词
 # 由每位角色的既定立场写成，而不是通用的“沉吟不语”。
 FALLBACK_SPEECH = {
-    ("kongzi", "s1"): "父有过，当几谏；告之于官，直而失其本也。",
-    ("kongzi", "s2"): "扶之，是仁；断其田，是直。恩不可冒充公道。",
-    ("kongzi", "s3"): "三年之丧，问的不是年数，是你心里安不安。",
+    ("kongzi", "s1"): "父亲做错了，该一遍遍劝他；直接告到官府，反倒把根本弄丢了。",
+    ("kongzi", "s2"): "先把他扶进来，这是仁；田地照公道来断，这才是直。",
+    ("kongzi", "s3"): "三年之丧，问的不是年数，是你心里到底安不安。",
     ("socrates", "s1"): "你说“直”，那么直究竟是什么？像医生开方那样，先把这个词说清吧。",
     ("socrates", "s2"): "你叫它“怨”，那么怨的是田，还是你这些年的自己？",
     ("socrates", "s3"): "“安”能作尺子吗？一个不哭的人，就一定更孝吗？",
-    ("hanfeizi", "s1"): "夫国有国法，家有家情；两令并行，赏罚必乱。",
-    ("hanfeizi", "s2"): "私怨交给私情，田地明日还会易主。卷宗比眼泪可靠。",
-    ("hanfeizi", "s3"): "可考者是行迹，不可考者是哀。拿哀做考核，人人都会演。",
+    ("hanfeizi", "s1"): "国法说一套，家里又说一套，赏罚马上就乱了。说到底，制度只能有一把尺。",
+    ("hanfeizi", "s2"): "私怨交给私情，明天田地还会换主人。卷宗比眼泪可靠。",
+    ("hanfeizi", "s3"): "能查的是行为，查不了的是哀伤。拿哀伤做考核，人人都会演。",
     ("kant", "s1"): "请区分沉默与撒谎。前者可以，后者不能成为所有人的法则。",
     ("kant", "s2"): "扶他，是把人当目的；索回田，是把正义当义务。两者不冲突。",
     ("kant", "s3"): "把孝期随意砍短，试试能否成为普遍法则；它不能。",
-    ("laozi", "s1"): "六亲不和，才有孝慈。这个家，先病在争“直”。",
-    ("laozi", "s2"): "和大怨，必有余怨。你抱着田，也被田抱着。",
-    ("laozi", "s3"): "数到三年，已忘了哀从何处来。",
-    ("mozi", "s1"): "今羊失一只，邻家少一餐。只护己父，谁来护天下人的父？",
+    ("laozi", "s1"): "六亲不和，才会把孝挂在嘴上。这个家先病在争谁更直。",
+    ("laozi", "s2"): "怨太大，和解后也还会有余怨。你抱着田，田也抱着你。",
+    ("laozi", "s3"): "数到三年，人已经忘了哀伤原本从哪里来。",
+    ("mozi", "s1"): "丢一只羊，邻家就少一餐。只护自己的父亲，谁来护别人的父亲？",
     ("mozi", "s2"): "扶人一刻，断田一案；两件都利于人，何必只做一件？",
     ("mozi", "s3"): "守丧三年，少耕三年。活人挨饿，不是孝。",
-    ("wangyangming", "s1"): "他开口前，良知已在心上起了一念；那一念，骗得了谁？",
+    ("wangyangming", "s1"): "他开口前，良知已经在心里动了一下；那一下，骗得了谁？",
     ("wangyangming", "s2"): "手碰门闩那一刻，良知已知当不当开门。你何必再躲？",
     ("wangyangming", "s3"): "若心里真安，行一年也不欺；怕只怕拿“安”遮住不安。",
     ("nietzsche", "s1"): "“直”也许只是他的粉底——但至少，他真的动手了。",
@@ -126,7 +126,9 @@ def _post_json(url: str, key: str, payload: dict, timeout: int = 90) -> bytes:
 def _turn_messages(persona_id: str, story_id: str, escalated: bool, transcript: list[dict], user_text: str | None) -> list[dict]:
     p = PERSONAS["personas"][persona_id]
     s = STORIES[story_id]
-    log = "\n".join(f"{t['name']}：{t['text']}" for t in transcript[-14:]) or "（还没有人发言）"
+    # 本局的每一句既往发言都要成为下一位角色的上下文；不能只截最近几句，
+    # 否则圆桌会退化成轮流各说各话。
+    log = "\n".join(f"{t['name']}：{t['text']}" for t in transcript) or "（还没有人发言）"
     esc = f"\n【议题已升级】{s['escalation']}" if escalated else ""
     user_part = (
         f"\n刚才旁听的玩家插话说：「{user_text}」。这句台词必须直接回应玩家本人——优先反问他自己的处境，别空谈道理。"
@@ -154,7 +156,7 @@ def _turn_messages(persona_id: str, story_id: str, escalated: bool, transcript: 
     user = f"""【本案】{s['scene']}
 焦点问题：{s['focal']}{esc}
 
-【对话记录】
+【本局此前完整对话记录】
 {log}
 {user_part}
 
@@ -284,7 +286,8 @@ match 必须是这十位之一：孔子、苏格拉底、韩非子、康德、�
 
 @router.get("/game")
 def game_page() -> FileResponse:
-    return FileResponse(STATIC_DIR / "game" / "index.html")
+    # 游戏迭代频繁，避免浏览器保留旧版 HTML 而加载到已删除的控件逻辑。
+    return FileResponse(STATIC_DIR / "game" / "index.html", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/sprites-review")
