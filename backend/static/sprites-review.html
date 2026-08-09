@@ -2,73 +2,88 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>雪碧图审阅 · 稷下</title>
+<title>发言动画审阅 v3 · 稷下</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body { background: #f6f2e8; color: #2f3430; font-family: "Songti SC","STSong",serif; padding: 36px 5vw; }
+body { background: #f6f2e8; color: #2f3430; font-family: "Songti SC","STSong",serif; padding: 36px 4vw 60px; }
 h1 { font-size: 26px; letter-spacing: 6px; }
-.sub { color: #6f6f63; font-size: 13px; margin: 8px 0 22px; }
-.controls { display: flex; gap: 16px; align-items: center; margin-bottom: 26px; font-size: 14px;
-  background: #fbf8f0; border: 1px solid #ddd5c2; border-radius: 12px; padding: 12px 18px; width: fit-content; }
-.controls input[type=range] { width: 180px; accent-color: #3d5940; }
-.row { display: grid; grid-template-columns: 150px 1fr 260px; gap: 22px; align-items: center;
-  background: #fbf8f0; border: 1px solid #ddd5c2; border-radius: 14px; padding: 18px 22px; margin-bottom: 16px; }
-.meta b { font-size: 19px; display: block; }
-.meta span { font-size: 12px; color: #6f6f63; }
-.meta i { font-style: normal; display: block; margin-top: 6px; font-size: 11px; color: #a9a390; }
-.sheet { position: relative; }
-.sheet img { width: 100%; border-radius: 8px; display: block; }
-.sheet::after { content: '原始绿幕 10帧 (2×5)'; position: absolute; top: 8px; left: 8px; font-size: 11px;
-  background: rgba(0,0,0,.55); color: #fff; padding: 2px 8px; border-radius: 5px; }
-.live { display: flex; align-items: flex-end; justify-content: center; gap: 0; height: 240px;
-  background: url('/static/assets/bg/garden.png') center/cover; border-radius: 10px; overflow: hidden; position: relative; }
-.live::after { content: '抠图后 · 实时动画'; position: absolute; top: 8px; left: 8px; font-size: 11px;
-  background: rgba(61,89,64,.8); color: #fff; padding: 2px 8px; border-radius: 5px; }
-.anim { width: 126px; height: 210px; background-size: 500% 200%; background-position: 0 0;
-  filter: drop-shadow(0 8px 8px rgba(50,60,40,.3)); margin-bottom: 4px; }
+.sub { color: #6f6f63; font-size: 13px; margin: 8px 0 20px; line-height: 1.9; }
+.controls { display: flex; gap: 16px; align-items: center; margin-bottom: 24px; font-size: 14px;
+  background: #fbf8f0; border: 1px solid #ddd5c2; border-radius: 12px; padding: 12px 18px; width: fit-content;
+  position: sticky; top: 10px; z-index: 5; box-shadow: 0 2px 14px rgba(60,60,40,.1); }
+.controls input[type=range] { width: 160px; accent-color: #3d5940; }
+.controls button { font-family: inherit; padding: 5px 14px; border: 1px solid #ddd5c2; border-radius: 7px; background: #fff; cursor: pointer; }
+.who { font-size: 19px; letter-spacing: 3px; margin: 26px 0 10px; }
+.who span { font-size: 12px; color: #6f6f63; margin-left: 10px; }
+.pair { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.ver { background: #fbf8f0; border: 1px solid #ddd5c2; border-radius: 14px; padding: 14px; }
+.ver h3 { font-size: 14px; margin-bottom: 8px; }
+.ver h3 b { color: #c26b4a; }
+.ver h3 span { font-size: 11px; color: #6f6f63; margin-left: 8px; }
+.duo { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
+.duo video { width: 100%; border-radius: 8px; display: block; background: #0a0; }
+.live { display: flex; align-items: flex-end; justify-content: center; min-height: 230px;
+  background: url('/static/assets/bg/garden.png') center/cover; border-radius: 8px; overflow: hidden; }
+.anim { width: 200px; height: 222px; background-size: 500% 300%; background-position: 0 0;
+  filter: drop-shadow(0 8px 8px rgba(50,60,40,.3)); margin-bottom: 2px; }
 </style>
 </head>
 <body>
-<h1>雪碧图审阅页</h1>
-<div class="sub">6 位哲学家 · GPT-Image-2 生成 10 帧绿幕雪碧图 → 本地色键抠图 → 帧步进动画（已实装进 /game）</div>
+<h1>发言动画审阅 v3 · 视频抽帧管线</h1>
+<div class="sub">
+新管线：定稿立绘 → 绿幕画布 → <b>图生视频</b>（Veo 3.1，锁定机位 4 秒）→ 均匀抽 15 帧 → 差值法抠绿 → <b>全帧统一裁剪+统一缩放</b>拼雪碧图。<br>
+每帧来自同一段视频 → 人物大小/位置<b>物理上不可能跳变</b>，也不存在邻格渗入；播放采用<b>乒乓循环</b>（0→14→0），首尾无跳帧。左=绿幕原视频，右=抠图后游戏内动画。<br>
+选好后告诉我每人用 A 还是 B（例：孔子A 庄子B……）。
+</div>
 <div class="controls">
-  帧率 <input type="range" id="fps" min="2" max="12" value="6"> <b id="fpsv">6</b> fps
-  <button id="toggle" style="font-family:inherit;padding:5px 14px;border:1px solid #ddd5c2;border-radius:7px;background:#fff;cursor:pointer">⏸ 暂停</button>
+  帧率 <input type="range" id="fps" min="4" max="14" value="8"> <b id="fpsv">8</b> fps
+  <button id="toggle">⏸ 暂停</button>
 </div>
 <div id="rows"></div>
 <script>
 const CAST = [
-  ['kongzi','孔子','捋须 · 颔首 · 抬手示意'],
-  ['socrates','苏格拉底','前倾 · 摊手发问 · 竖指'],
-  ['hanfeizi','韩非子','抱臂 · 冷眼 · 切掌'],
-  ['kant','康德','抿茶 · 竖指强调 · 浅笑'],
-  ['laozi','老子','近乎不动 · 袖摆 · 睁闭眼'],
-  ['zhuangzi','庄子','笑 · 挥袖 · 指蝴蝶'],
+  ['kongzi','孔子','A:捋须说话 / B:摊掌指点'],
+  ['socrates','苏格拉底','A:挑眉发问 / B:掌心上翻'],
+  ['kant','康德','A:持杯精确措辞 / B:抿茶+竖指'],
+  ['hanfeizi','韩非子','A:抱臂冷言 / B:切掌'],
+  ['laozi','老子','A:呼吸胡须起伏 / B:睁眼抬手'],
+  ['zhuangzi','庄子','A:轻笑耸肩 / B:蝴蝶起飞绕圈'],
+  ['mozi','墨子','A:工头式陈述 / B:掰指头算账'],
+  ['wangyangming','王阳明','A:温润而谈 / B:折扇叩掌'],
+  ['nietzsche','尼采','A:胡子下低语 / B:抬颌攥椅'],
+  ['diogenes','第欧根尼','A:坏笑挑眉 / B:摊手耸肩'],
+  ['player','你 · 玩家','A:倾听记笔记 / B:执笔发言'],
 ];
 const rows = document.getElementById('rows');
-CAST.forEach(([id,name,gest]) => {
-  rows.insertAdjacentHTML('beforeend', `
-    <div class="row">
-      <div class="meta"><b>${name}</b><span>${gest}</span><i>sprites/${id}.png · sprites/raw/${id}-green.png</i></div>
-      <div class="sheet"><img src="/static/assets/sprites/raw/${id}-green.png"></div>
-      <div class="live"><div class="anim" style="background-image:url('/static/assets/sprites/${id}.png')"></div></div>
-    </div>`);
+CAST.forEach(([id, name, gest]) => {
+  let html = `<div class="who">${name}<span>${gest}</span></div><div class="pair">`;
+  for (const v of ['a', 'b']) {
+    html += `
+      <div class="ver">
+        <h3>版本 <b>${v.toUpperCase()}</b><span>sprites/${id}-${v}.png · clips/${id}-${v}.mp4</span></h3>
+        <div class="duo">
+          <video src="/static/assets/sprites/clips/${id}-${v}.mp4" muted loop autoplay playsinline></video>
+          <div class="live"><div class="anim" style="background-image:url('/static/assets/sprites/${id}-${v}.png')"></div></div>
+        </div>
+      </div>`;
+  }
+  rows.insertAdjacentHTML('beforeend', html + '</div>');
 });
-let fps = 6, playing = true, f = 0, last = 0;
+// 乒乓循环播放
+let fps = 8, playing = true, t = 0, last = 0;
+const F = 15, CYCLE = (F - 1) * 2;
 requestAnimationFrame(function loop(now) {
   if (playing && now - last >= 1000 / fps) {
     last = now;
-    f = (f + 1) % 10;
-    document.querySelectorAll('.anim').forEach(el =>
-      el.style.backgroundPosition = `${(f % 5) * 25}% ${f < 5 ? 0 : 100}%`);
+    t = (t + 1) % CYCLE;
+    const f = t < F ? t : CYCLE - t;
+    const pos = `${(f % 5) * 25}% ${Math.floor(f / 5) * 50}%`;
+    document.querySelectorAll('.anim').forEach(el => el.style.backgroundPosition = pos);
   }
   requestAnimationFrame(loop);
 });
 document.getElementById('fps').oninput = (e) => { fps = +e.target.value; document.getElementById('fpsv').textContent = fps; };
-document.getElementById('toggle').onclick = (e) => {
-  playing = !playing;
-  e.target.textContent = playing ? '⏸ 暂停' : '▶ 播放';
-};
+document.getElementById('toggle').onclick = (e) => { playing = !playing; e.target.textContent = playing ? '⏸ 暂停' : '▶ 播放'; };
 </script>
 </body>
 </html>

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>座位方案对比 · 稷下</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f6f2e8; color: #2f3430; font-family: "Songti SC","STSong",serif; padding: 36px 4vw 60px; }
+h1 { font-size: 26px; letter-spacing: 6px; }
+.sub { color: #6f6f63; font-size: 13px; margin: 8px 0 24px; line-height: 1.9; }
+.row { display: grid; grid-template-columns: 70px 1fr 1fr; gap: 14px; align-items: center; margin-bottom: 18px; }
+.n { font-size: 15px; letter-spacing: 2px; color: #3d5940; text-align: center; }
+.n b { font-size: 26px; display: block; }
+.shot { background: #fbf8f0; border: 1px solid #ddd5c2; border-radius: 12px; overflow: hidden; }
+.shot img { width: 100%; display: block; cursor: zoom-in; }
+.head { display: grid; grid-template-columns: 70px 1fr 1fr; gap: 14px; margin-bottom: 10px;
+  font-size: 16px; letter-spacing: 3px; text-align: center; font-weight: 700; }
+.head span:nth-child(2) { color: #446a8c; }
+.head span:nth-child(3) { color: #c26b4a; }
+</style>
+</head>
+<body>
+<h1>座位锚点方案 · c5 vs c6 实拍对比</h1>
+<div class="sub">
+座位系统已实装：每张背景一份手工锚点表（x/落座高度/近大远小），按人数取"间距最大组合"随机分座，玩家固定旁听席，错落来自锚点深浅——不会再坐进水里。<br>
+c6 已按反馈改为溪窄版 + 弧形座次（座位围玩家成弧、邻距均匀），并设为正式默认背景；c5 列保留供对照。点图可放大。
+</div>
+<div class="head"><span></span><span>候选 5 · 原版扩台</span><span>候选 6 · 溪窄版（已设为默认）</span></div>
+<div id="rows"></div>
+<script>
+const rows = document.getElementById('rows');
+[2, 3, 4, 5].forEach((n) => {
+  rows.insertAdjacentHTML('beforeend', `
+    <div class="row">
+      <div class="n"><b>${n}</b>人</div>
+      <div class="shot"><a href="/static/assets/bg/previews/c5-${n}.png" target="_blank"><img src="/static/assets/bg/previews/c5-${n}.png"></a></div>
+      <div class="shot"><a href="/static/assets/bg/previews/c6-${n}.png" target="_blank"><img src="/static/assets/bg/previews/c6-${n}.png"></a></div>
+    </div>`);
+});
+</script>
+</body>
+</html>
