@@ -160,6 +160,8 @@ def _turn_messages(persona_id: str, story_id: str, escalated: bool, transcript: 
 {log}
 {user_part}
 
+先在心中找出此前记录里一个具体的词、理由或矛盾，再接住、反驳或推进它。不得把角色立场当成脱离记录的独白；若不同意，也要说清是在反对哪一种理由。
+
 现在输出{p['name']}的下一句台词（只输出台词本身）："""
     return [{"role": "system", "content": system}, {"role": "user", "content": user}]
 
