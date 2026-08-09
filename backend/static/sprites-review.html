@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>发言动画审阅 v3 · 稷下</title>
+<title>静默态审阅 v4 · 稷下</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #f6f2e8; color: #2f3430; font-family: "Songti SC","STSong",serif; padding: 36px 4vw 60px; }
@@ -20,8 +20,7 @@ h1 { font-size: 26px; letter-spacing: 6px; }
 .ver h3 { font-size: 14px; margin-bottom: 8px; }
 .ver h3 b { color: #c26b4a; }
 .ver h3 span { font-size: 11px; color: #6f6f63; margin-left: 8px; }
-.duo { display: grid; grid-template-columns: 1fr 1.4fr; gap: 10px; }
-.duo video { width: 100%; border-radius: 8px; display: block; background: #0a0; }
+.duo { display: grid; grid-template-columns: 1fr; gap: 10px; }
 .live { display: flex; align-items: flex-end; justify-content: center; min-height: 230px;
   background: url('/static/assets/bg/garden.png') center/cover; border-radius: 8px; overflow: hidden; }
 .anim { width: 200px; height: 222px; background-size: 500% 300%; background-position: 0 0;
@@ -29,11 +28,10 @@ h1 { font-size: 26px; letter-spacing: 6px; }
 </style>
 </head>
 <body>
-<h1>发言动画审阅 v3 · 视频抽帧管线</h1>
+<h1>静默态审阅 v4 · 极轻微呼吸</h1>
 <div class="sub">
-新管线：定稿立绘 → 绿幕画布 → <b>图生视频</b>（Veo 3.1，锁定机位 4 秒）→ 均匀抽 15 帧 → 差值法抠绿 → <b>全帧统一裁剪+统一缩放</b>拼雪碧图。<br>
-每帧来自同一段视频 → 人物大小/位置<b>物理上不可能跳变</b>，也不存在邻格渗入；播放采用<b>乒乓循环</b>（0→14→0），首尾无跳帧。左=绿幕原视频，右=抠图后游戏内动画。<br>
-选好后告诉我每人用 A 还是 B（例：孔子A 庄子B……）。
+这是游戏中实际使用的 <b>ia / ib 静默雪碧图</b>。舞台不再完整播放 15 帧：大部分时间停在首帧，只偶尔闪到第 1、2 帧，并加 1px 呼吸，确保谁在说话一眼可见。<br>
+每位角色保留两个静默姿态供审阅；如果其中一版仍显得太夸张，请直接标注角色名与版本（例：孔子 IA 保留、IB 重做）。
 </div>
 <div class="controls">
   帧率 <input type="range" id="fps" min="4" max="14" value="8"> <b id="fpsv">8</b> fps
@@ -42,41 +40,39 @@ h1 { font-size: 26px; letter-spacing: 6px; }
 <div id="rows"></div>
 <script>
 const CAST = [
-  ['kongzi','孔子','A:捋须说话 / B:摊掌指点'],
-  ['socrates','苏格拉底','A:挑眉发问 / B:掌心上翻'],
-  ['kant','康德','A:持杯精确措辞 / B:抿茶+竖指'],
-  ['hanfeizi','韩非子','A:抱臂冷言 / B:切掌'],
-  ['laozi','老子','A:呼吸胡须起伏 / B:睁眼抬手'],
-  ['zhuangzi','庄子','A:轻笑耸肩 / B:蝴蝶起飞绕圈'],
-  ['mozi','墨子','A:工头式陈述 / B:掰指头算账'],
-  ['wangyangming','王阳明','A:温润而谈 / B:折扇叩掌'],
-  ['nietzsche','尼采','A:胡子下低语 / B:抬颌攥椅'],
-  ['diogenes','第欧根尼','A:坏笑挑眉 / B:摊手耸肩'],
-  ['player','你 · 玩家','A:倾听记笔记 / B:执笔发言'],
+  ['kongzi','孔子','静默时只留呼吸与极轻的捋须'],
+  ['socrates','苏格拉底','静默时听人，偶有挑眉'],
+  ['kant','康德','静默时端坐，避免手势抢戏'],
+  ['hanfeizi','韩非子','静默时收势，目光不移'],
+  ['laozi','老子','静默时近乎不动'],
+  ['zhuangzi','庄子','静默时不放飞蝴蝶'],
+  ['mozi','墨子','静默时收起算账动作'],
+  ['wangyangming','王阳明','静默时含蓄听人'],
+  ['nietzsche','尼采','静默时仅轻抬下颌'],
+  ['diogenes','第欧根尼','静默时不耸肩摊手'],
+  ['player','你 · 玩家','静默时缩小、安静旁听'],
 ];
 const rows = document.getElementById('rows');
 CAST.forEach(([id, name, gest]) => {
   let html = `<div class="who">${name}<span>${gest}</span></div><div class="pair">`;
-  for (const v of ['a', 'b']) {
+  for (const v of ['ia', 'ib']) {
     html += `
       <div class="ver">
-        <h3>版本 <b>${v.toUpperCase()}</b><span>sprites/${id}-${v}.png · clips/${id}-${v}.mp4</span></h3>
+        <h3>静默版本 <b>${v.toUpperCase()}</b><span>sprites/${id}-${v}.png</span></h3>
         <div class="duo">
-          <video src="/static/assets/sprites/clips/${id}-${v}.mp4" muted loop autoplay playsinline></video>
           <div class="live"><div class="anim" style="background-image:url('/static/assets/sprites/${id}-${v}.png')"></div></div>
         </div>
       </div>`;
   }
   rows.insertAdjacentHTML('beforeend', html + '</div>');
 });
-// 乒乓循环播放
+// 与游戏一致：首帧为主，偶尔才显示第 1、2 帧。
 let fps = 8, playing = true, t = 0, last = 0;
-const F = 15, CYCLE = (F - 1) * 2;
 requestAnimationFrame(function loop(now) {
   if (playing && now - last >= 1000 / fps) {
     last = now;
-    t = (t + 1) % CYCLE;
-    const f = t < F ? t : CYCLE - t;
+    t = (t + 1) % 12;
+    const f = t === 5 ? 1 : t === 11 ? 2 : 0;
     const pos = `${(f % 5) * 25}% ${Math.floor(f / 5) * 50}%`;
     document.querySelectorAll('.anim').forEach(el => el.style.backgroundPosition = pos);
   }

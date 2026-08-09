@@ -82,11 +82,6 @@ button { font-family: var(--serif); cursor: pointer; }
   border-radius: 8px; color: var(--ink); }
 .tb-btn:hover { border-color: var(--sage); }
 .tb-leave { color: var(--terra); }
-.mode-switch input { display: none; }
-.ms-track { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 13px; cursor: pointer; }
-.ms-track span { padding: 7px 12px; color: var(--ink-dim); }
-.mode-switch input:checked + .ms-track .ms-voice { background: var(--sage-deep); color: #fff; }
-.mode-switch input:not(:checked) + .ms-track .ms-text { background: var(--blue); color: #fff; }
 
 .table-main { flex: 1; display: flex; min-height: 0; }
 
@@ -116,6 +111,8 @@ button { font-family: var(--serif); cursor: pointer; }
 .char { position: absolute; transform: translateX(-50%); transition: transform .5s, filter .5s, bottom .5s; cursor: pointer; }
 .char .sprite { width: 250px; height: 278px; background-size: 500% 300%; background-position: 0% 0%;
   filter: drop-shadow(0 10px 10px rgba(50,60,40,.25)); }
+.char.idle .sprite { animation: idlebreath 6.4s ease-in-out infinite; }
+@keyframes idlebreath { 0%, 100% { translate: 0 0; } 50% { translate: 0 -1px; } }
 .char .ground { position: absolute; left: 50%; bottom: 2px; width: 130px; height: 26px; transform: translateX(-50%);
   background: radial-gradient(ellipse, rgba(92,122,94,.55), transparent 70%); opacity: 0; transition: opacity .4s; }
 .char .tag { position: absolute; left: 50%; bottom: -34px; transform: translateX(-50%); white-space: nowrap;
@@ -151,12 +148,13 @@ button { font-family: var(--serif); cursor: pointer; }
 .bubble-name { font-size: 11.5px; letter-spacing: 1px; margin-bottom: 3px; font-weight: 700; }
 .bubble-text { font-size: 15.5px; line-height: 1.8; }
 
-/* 思考气泡（画风贴图，绿幕抠图产物） */
-.think { position: absolute; z-index: 21; width: 92px; height: 82px; display: none;
-  background: url('/static/assets/ui/think.png') center/contain no-repeat;
-  font-size: 0; filter: drop-shadow(0 3px 6px rgba(50,60,40,.18)); }
-.think.on { display: block; animation: thinkbob 1.2s ease-in-out infinite; }
-@keyframes thinkbob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+/* 思考与台词共用纸质气泡语言，只保留一个很轻的呼吸感。 */
+.think { position: absolute; z-index: 21; display: none; background: var(--paper); border: 1.5px solid var(--ink);
+  border-radius: 14px; padding: 8px 12px; font-size: 12px; letter-spacing: 1px; color: var(--ink-dim); box-shadow: var(--shadow); }
+.think::after { content: ''; position: absolute; bottom: -7px; left: 22px; width: 11px; height: 11px;
+  background: var(--paper); border-right: 1.5px solid var(--ink); border-bottom: 1.5px solid var(--ink); transform: rotate(45deg); }
+.think.on { display: block; animation: thinkbob 2.8s ease-in-out infinite; }
+@keyframes thinkbob { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
 
 /* 轮到你 */
 .user-cue { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);

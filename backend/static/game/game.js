@@ -19,7 +19,7 @@ const CAST = {
   mozi:         { name: '墨子',     tag: '天下的会计', color: '#6f5233' },
   wangyangming: { name: '王阳明',   tag: '致良知',     color: '#446a8c' },
   nietzsche:    { name: '尼采',     tag: '持锤者',     color: '#5c4a6e' },
-  diogenes:     { name: '第欧根尼', tag: '木桶里的狗', color: '#7d7a6a' },
+  diogenes:     { name: '第欧根尼', tag: '陶罐里的狗', color: '#7d7a6a' },
   player:       { name: '你',       tag: '参与者',     color: '#33566b', npc: false },
 };
 // 雪碧图：15帧 5×3，乒乓循环；每人 a/b 两版——发言时随机挑一版，表现力更足
@@ -41,7 +41,7 @@ const SEATS = {
       A: [33, 43, 0.62], B: [74, 44, 0.64],          // 后排·台深处（左/右，与前排错列）
       E: [78, 29, 0.82],                              // 中排·右
       F: [44, 24, 0.92], G: [60, 17, 1.00],          // 前排·台缘
-      P: [26, 14, 1.00],                              // 玩家旁听席·前庭左
+      P: [26, 14, 0.84],                              // 玩家旁听席·前庭左（比 NPC 收一档）
     },
     subsets: { 1: ['F'], 2: ['F', 'E'], 3: ['A', 'E', 'F'], 4: ['A', 'B', 'F', 'G'] },
     player: 'P',
@@ -53,7 +53,7 @@ const SEATS = {
       BL: [38, 42, 0.62], BC: [51, 41, 0.64], BR: [63, 42, 0.63], // 后排弧
       ML: [25, 27, 0.82], MR: [76, 27, 0.84],                     // 中排两翼
       CL: [36, 29, 0.78], CR: [65, 30, 0.80],                     // 近中一对
-      P:  [50, 9, 1.02],                                           // 玩家·前庭正中
+      P:  [50, 9, 0.86],                                           // 玩家·前庭正中（不压过圆桌人物）
     },
     subsets: { 1: ['CR'], 2: ['CL', 'CR'], 3: ['CL', 'CR', 'BC'], 4: ['ML', 'MR', 'BL', 'BR'] },
     player: 'P',
@@ -87,6 +87,7 @@ const S = {
   cueTarget: null,
   interruptFlag: false,
   voiceMode: true,
+  audioMuted: false,
   running: false,
   aborted: false,
   audio: null,
@@ -113,7 +114,7 @@ async function boot() {
   $('#btn-leave').onclick = endMeeting;
   $('#btn-original').onclick = () => $('#modal-original').classList.add('open');
   $('#btn-orig-close').onclick = () => $('#modal-original').classList.remove('open');
-  $('#mode-toggle').onchange = (e) => { S.voiceMode = e.target.checked; };
+  $('#btn-mute').onclick = toggleMute;
   $('#btn-skip-cue').onclick = () => { S.cueSkip = true; };
   setupMic();
   window.addEventListener('resize', () => layoutChars(true));
@@ -241,7 +242,7 @@ function layoutChars(keepOrder = false) {
     c.jx = jx; c.jy = jy;
     c.x = Math.max(10, Math.min(84, x));
     c.bottom = band.bottom + jy;
-    c.scale = band.scale;
+    c.scale = id === 'player' ? band.scale * 0.86 : band.scale;
     c.el.style.left = c.x + '%';
     c.el.style.bottom = c.bottom + '%';
     c.el.style.zIndex = band.scale === 1 ? 6 : 3;
@@ -268,7 +269,6 @@ function mountChars() {
     ['a', 'b', 'ia', 'ib'].forEach((v) => { new Image().src = SPRITE(id, v); });  // 预载不闪
     startIdle(id);
   });
-  schedulePlayerNotes();
   S.bandSeed = null;
   layoutChars();
 }
@@ -299,7 +299,7 @@ async function runGame() {
     const meta = STORY_META.stories.find((x) => x.id === st.id);
     S.escalated = false;
     setTheater(st, meta);
-    if (S.voiceMode) {                                   // 预热主持人整案台词
+    if (canPlayAudio()) {                                // 预热主持人整案台词
       warmTTS('host', meta.host_intro);
       warmTTS('host', meta.host_user_cue);
       warmTTS('host', meta.host_escalation_line);
@@ -412,7 +412,7 @@ async function speak(id, st, opts = {}) {
   $('#btn-interrupt').classList.add('on');
   S.interruptFlag = false;
 
-  if (S.voiceMode) {
+  if (canPlayAudio()) {
     const wav = turn.wav || await fetchTTS(id, turn.text);
     if (wav && !S.interruptFlag && !S.aborted) await playAudio(wav);
     else if (!wav) await sleep(readTime(turn.text));
@@ -456,7 +456,7 @@ async function fetchTurn(id, st, userText, transcriptOverride) {
     const { speech, skipped } = await r.json();
     if (skipped || !speech) return { text: '' };        // 上游拒答多次：跳过该角色
     const out = { text: speech };
-    if (S.voiceMode) out.wavP = fetchTTS(id, speech);   // 语音并行预取
+    if (canPlayAudio()) out.wavP = fetchTTS(id, speech); // 语音并行预取
     if (out.wavP) out.wav = await out.wavP.catch(() => null);
     return out;
   } catch (e) {
@@ -485,6 +485,15 @@ function playAudio(blob) {
   });
 }
 
+function canPlayAudio() { return S.voiceMode && !S.audioMuted; }
+function toggleMute() {
+  S.audioMuted = !S.audioMuted;
+  if (S.audioMuted && S.audio) { try { S.audio.pause(); } catch {} S.audio = null; }
+  const btn = $('#btn-mute');
+  btn.textContent = S.audioMuted ? '🔇 已静音' : '🔊 全员静音';
+  btn.setAttribute('aria-pressed', String(S.audioMuted));
+}
+
 function readTime(text) { return Math.max(2200, text.length * 145); }
 
 async function typewriterWait(text) {
@@ -506,7 +515,7 @@ async function hostSay(text) {
   const b = $('#host-banner');
   b.textContent = text;
   b.classList.add('on');
-  if (S.voiceMode) {
+  if (canPlayAudio()) {
     const wav = await warmTTS('host', text);
     if (wav && !S.aborted) await playAudio(wav);
     else await sleep(readTime(text) * 0.8);
@@ -597,7 +606,7 @@ function focusChar(id, on) {
   });
 }
 
-// ── 聆听循环：静默微动作雪碧图（ia/ib 随机），低帧率乒乓，永不完全静止 ──
+// ── 聆听循环：绝大多数时间停在首帧，只偶尔掠过 1–2 帧，避免全员抢戏。 ──
 function startIdle(id) {
   const c = S.chars[id];
   if (!c) return;
@@ -605,18 +614,21 @@ function startIdle(id) {
   c.idleVer = Math.random() < 0.5 ? 'ia' : 'ib';
   setSpriteVer(id, c.idleVer);
   const sp = c.el.querySelector('.sprite');
-  let t = 0;
+  c.el.classList.add('idle');
+  let beat = 0;
   c.idleTimer = setInterval(() => {
-    setFrame(sp, pingpong(++t));
-    if (t % ((FRAMES - 1) * 2) === 0) {              // 每个来回随机换一版聆听动作
+    beat = (beat + 1) % 12;
+    setFrame(sp, beat === 5 ? 1 : beat === 11 ? 2 : 0);
+    if (beat === 0 && Math.random() < 0.35) {         // 很久才换一次聆听姿态
       c.idleVer = Math.random() < 0.5 ? 'ia' : 'ib';
       setSpriteVer(id, c.idleVer);
     }
-  }, 200);                                            // 5 fps，慢而不僵
+  }, 900);
 }
 function stopIdle(id) {
   const c = S.chars[id];
   if (c && c.idleTimer) { clearInterval(c.idleTimer); c.idleTimer = null; }
+  if (c) c.el.classList.remove('idle');
 }
 
 function startAnim(id) {
@@ -676,11 +688,11 @@ function showBubble(id, text) {
   const b = $('#bubble');
   $('#bubble-name').textContent = CAST[id].name;
   $('#bubble-name').style.color = CAST[id].color;
-  $('#bubble-text').textContent = S.voiceMode ? text : '';
+  $('#bubble-text').textContent = text;
   b.classList.remove('interrupted');
   const left = Math.max(10, Math.min(a.x - 60, a.stageR.width - 360));
   b.style.left = left + 'px';
-  b.style.bottom = Math.min(a.top - 6, a.stageR.height - 90) + 'px';   // 紧贴头顶
+  b.style.bottom = Math.min(a.top + 10, a.stageR.height - 90) + 'px';  // 留出尾巴空间，不压住人物
   b.classList.add('on');
 }
 function hideBubble() { $('#bubble').classList.remove('on'); }
@@ -689,8 +701,8 @@ function showThink(id, on) {
   const t = $('#think');
   if (!on) { t.classList.remove('on'); return; }
   const a = headAnchor(id);
-  t.style.left = (a.x + 14) + 'px';                                    // 头右上，贴近
-  t.style.bottom = (a.top - 26) + 'px';
+  t.style.left = Math.max(10, Math.min(a.x + 12, a.stageR.width - 100)) + 'px';
+  t.style.bottom = Math.min(a.top + 8, a.stageR.height - 62) + 'px';
   t.classList.add('on');
 }
 

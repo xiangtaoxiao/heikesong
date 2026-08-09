@@ -40,6 +40,45 @@ REFUSAL_PAT = re.compile(
     re.IGNORECASE,
 )
 
+# 只要上游模型出戏、超时或通道未配置，游戏也必须让角色继续说话。这里的短台词
+# 由每位角色的既定立场写成，而不是通用的“沉吟不语”。
+FALLBACK_SPEECH = {
+    ("kongzi", "s1"): "父有过，当几谏；告之于官，直而失其本也。",
+    ("kongzi", "s2"): "扶之，是仁；断其田，是直。恩不可冒充公道。",
+    ("kongzi", "s3"): "三年之丧，问的不是年数，是你心里安不安。",
+    ("socrates", "s1"): "你说“直”，那么直究竟是什么？像医生开方那样，先把这个词说清吧。",
+    ("socrates", "s2"): "你叫它“怨”，那么怨的是田，还是你这些年的自己？",
+    ("socrates", "s3"): "“安”能作尺子吗？一个不哭的人，就一定更孝吗？",
+    ("hanfeizi", "s1"): "夫国有国法，家有家情；两令并行，赏罚必乱。",
+    ("hanfeizi", "s2"): "私怨交给私情，田地明日还会易主。卷宗比眼泪可靠。",
+    ("hanfeizi", "s3"): "可考者是行迹，不可考者是哀。拿哀做考核，人人都会演。",
+    ("kant", "s1"): "请区分沉默与撒谎。前者可以，后者不能成为所有人的法则。",
+    ("kant", "s2"): "扶他，是把人当目的；索回田，是把正义当义务。两者不冲突。",
+    ("kant", "s3"): "把孝期随意砍短，试试能否成为普遍法则；它不能。",
+    ("laozi", "s1"): "六亲不和，才有孝慈。这个家，先病在争“直”。",
+    ("laozi", "s2"): "和大怨，必有余怨。你抱着田，也被田抱着。",
+    ("laozi", "s3"): "数到三年，已忘了哀从何处来。",
+    ("mozi", "s1"): "今羊失一只，邻家少一餐。只护己父，谁来护天下人的父？",
+    ("mozi", "s2"): "扶人一刻，断田一案；两件都利于人，何必只做一件？",
+    ("mozi", "s3"): "守丧三年，少耕三年。活人挨饿，不是孝。",
+    ("wangyangming", "s1"): "他开口前，良知已在心上起了一念；那一念，骗得了谁？",
+    ("wangyangming", "s2"): "手碰门闩那一刻，良知已知当不当开门。你何必再躲？",
+    ("wangyangming", "s3"): "若心里真安，行一年也不欺；怕只怕拿“安”遮住不安。",
+    ("nietzsche", "s1"): "“直”也许只是他的粉底——但至少，他真的动手了。",
+    ("nietzsche", "s2"): "把怨养三十年，是替仇人供了一张床。病的是谁？",
+    ("nietzsche", "s3"): "把哀写成三年，是给活人看的戏。死者不买票。",
+    ("diogenes", "s1"): "一只羊，把一群体面人牵去法庭。灯笼一照，没几个像人。",
+    ("diogenes", "s2"): "半亩田住在你脑子里三十年，倒是它占了你。开门。",
+    ("diogenes", "s3"): "尸体不会嫌短，活人才爱摆三年的牌坊。",
+    ("zhuangzi", "s1"): "秋风没去告发夏天，羊也没去告发人。偏你们最忙。",
+    ("zhuangzi", "s2"): "两条鱼困在浅水里，忘了江湖，就只剩彼此的牙印。",
+    ("zhuangzi", "s3"): "盆一响，四时还在走。哭的是他，还是舍不得的我？",
+}
+
+
+def _fallback_speech(persona_id: str, story_id: str) -> str:
+    return FALLBACK_SPEECH.get((persona_id, story_id), "且把话放在这里：先看你自己正在做什么。")
+
 
 def _load(name: str) -> dict:
     return json.loads((GAME_DIR / name).read_text(encoding="utf-8"))
@@ -108,7 +147,10 @@ def _turn_messages(persona_id: str, story_id: str, escalated: bool, transcript: 
 1. 最多2句话，总共不超过55个字——会被真人语音念出来，必须是口语。
 2. 不复述别人的观点，不总结，不说"这个问题很好"。
 3. 不写动作描写、括号、引号，只写说出口的话。
-4. 语气必须像角色本人，不许像客服。"""
+4. 语气必须像角色本人，不许像客服。
+5. 孔子、韩非子、老子、墨子、王阳明、庄子：用今天能听懂的普通话，带少量文言节奏；绝不可整段文言。
+6. 苏格拉底、康德、第欧根尼、尼采：用自然中文，允许轻微译著腔；不可假装会说现代网络黑话。
+7. 若上下文不全，也要依据角色卡和本案写一句具体台词；不得索要补充信息。"""
     user = f"""【本案】{s['scene']}
 焦点问题：{s['focal']}{esc}
 
@@ -137,7 +179,12 @@ def game_turn(payload: dict) -> dict:
     story_id = payload.get("story")
     if persona_id not in PERSONAS["personas"] or story_id not in STORIES:
         raise HTTPException(status_code=400, detail="unknown persona/story")
-    base, key, model = _api()
+    fallback = _fallback_speech(persona_id, story_id)
+    try:
+        base, key, model = _api()
+    except HTTPException:
+        LOGGER.warning("game turn uses local fallback: API is unavailable")
+        return {"speech": fallback, "fallback": True}
     messages = _turn_messages(
         persona_id,
         story_id,
@@ -158,7 +205,8 @@ def game_turn(payload: dict) -> dict:
         LOGGER.warning("turn refusal/empty (attempt %s, model %s): %s", i + 1, m, text[:80])
         text = ""
     if not text:
-        return {"speech": "", "skipped": True}
+        LOGGER.warning("game turn uses local fallback after all model attempts: %s/%s", persona_id, story_id)
+        return {"speech": fallback, "fallback": True}
     if len(text) > 90:
         cut = max(text.rfind("。", 0, 90), text.rfind("？", 0, 90), text.rfind("！", 0, 90))
         text = text[: cut + 1] if cut > 20 else text[:90]
