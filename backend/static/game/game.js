@@ -1,4 +1,4 @@
-// ═══ 稷下·论语圆桌 — 语音房游戏引擎 ═══
+// ═══ 问道·未竟的论语 — 语音房游戏引擎 ═══
 // 机制要点：
 //  · 轮流发言一圈 → 主持人 cue 玩家(限时窗) → 议题升级 → 再一圈
 //  · 玩家随时插话：句间自动排队插入；句中可按「打断」立即插入
@@ -7,22 +7,40 @@
 //  · 预取下一句（文本+语音），发言间隙≈0
 
 const $ = (s) => document.querySelector(s);
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+async function sleep(ms) {
+  let remaining = ms;
+  let started = performance.now();
+  while (remaining > 0 && !S.aborted) {
+    await new Promise((resolve) => setTimeout(resolve, Math.min(remaining, 100)));
+    if (S.paused) {
+      await waitIfPaused();
+      started = performance.now();
+    } else {
+      const now = performance.now();
+      remaining -= now - started;
+      started = now;
+    }
+  }
+}
 
 const CAST = {
-  kongzi:   { name: '孔子',     tag: '义与关系', color: '#2e5f5c' },
-  socrates: { name: '苏格拉底', tag: '追问概念', color: '#b08c3d' },
-  hanfeizi: { name: '韩非子',   tag: '法与权术', color: '#a83226' },
-  kant:     { name: '康德',     tag: '原则与义务', color: '#31548c' },
-  laozi:    { name: '老子',     tag: '不辩者',   color: '#7a8b6f' },
-  zhuangzi: { name: '庄子',     tag: '鼓盆的人', color: '#8a5a33' },
+  kongzi: { name: '孔子', tag: '义与关系', color: '#2e5f5c', sprite: true }, socrates: { name: '苏格拉底', tag: '追问概念', color: '#b08c3d', sprite: true }, hanfeizi: { name: '韩非子', tag: '法与权术', color: '#a83226', sprite: true }, kant: { name: '康德', tag: '原则与义务', color: '#31548c', sprite: true }, laozi: { name: '老子', tag: '不辩者', color: '#7a8b6f', sprite: true }, zhuangzi: { name: '庄子', tag: '鼓盆的人', color: '#8a5a33', sprite: true },
+  aristotle: { name: '亚里士多德', tag: '实践智慧', color: '#7b5e3b' }, mozi: { name: '墨子', tag: '兼爱非攻', color: '#4f6d54' }, nietzsche: { name: '尼采', tag: '重估价值', color: '#8d3e32' }, plato: { name: '柏拉图', tag: '洞穴与真理', color: '#536b9b' }, sartre: { name: '萨特', tag: '自由与责任', color: '#3f3f54' }, wangyangming: { name: '王阳明', tag: '致良知', color: '#a1663a' },
 };
 const SPRITE = (id) => `/static/assets/sprites/${id}.png`;
+const portrait = (id, className) => CAST[id].sprite ? `<div class="${className}" style="background-image:url('${SPRITE(id)}')"></div>` : `<div class="${className} text-portrait" style="--portrait-color:${CAST[id].color}">${CAST[id].name}</div>`;
 
 const STORIES = [
   { id: 's1', title: '一只羊',     source: '《论语·子路》13.18', focal: '这个儿子做对了吗？' },
   { id: 's2', title: '门口的仇人', source: '《论语·宪问》14.34', focal: '该怎么对待伤害过你的人？' },
   { id: 's3', title: '三年之丧',   source: '《论语·阳货》17.21', focal: '宰予错了吗？' },
+  { id: 's4', title: '己欲立而立人', source: '《论语·雍也》6.30', focal: '成全别人，是仁，还是负担？' },
+  { id: 's5', title: '颜回陋巷', source: '《论语·雍也》6.11', focal: '贫困中的安乐，应被赞美吗？' },
+  { id: 's6', title: '阳货之避', source: '《论语·阳货》17.1', focal: '周旋是妥协，还是保全？' },
+  { id: 's7', title: '陈蔡绝粮', source: '《论语·卫灵公》15.2', focal: '绝境中如何守住理想？' },
+  { id: 's8', title: '孔子见南子', source: '《论语·雍也》6.28', focal: '本心清白，够不够？' },
+  { id: 's9', title: '三人行必有我师', source: '《论语·述而》7.22', focal: '学习怎样不盲从？' },
+  { id: 's10', title: '乘桴浮于海', source: '《论语·公冶长》5.7', focal: '道路不通时如何选择？' },
 ];
 let STORY_META = {};   // 从后端 config 静态文件补全 host 台词/原文（见 boot）
 
@@ -32,38 +50,61 @@ const S = {
   storyIdx: 0,
   escalated: false,
   transcript: [],       // {who:'host'|'user'|id, name, text}
+  storyTranscript: [],
+  relationshipLedger: { recent: [] },
   userLines: [],
   pendingUser: null,    // {text, target}
   cueTarget: null,
+  cueActive: false,
+  cuePaused: false,
   interruptFlag: false,
   voiceMode: true,
   running: false,
   aborted: false,
+  paused: false,
+  pauseWaiters: [],
   audio: null,
+  stopAudio: null,
   animTimer: null,
   prefetch: {},         // key → Promise<{text, wav}>
+  hostPrefetch: {},     // story/task → Promise<{text, audioPromise}>
+  requestControllers: new Set(),
+  audioRequestControllers: new Set(),
+  hostBannerVersion: 0,
+  turnEpoch: 0,
   chars: {},            // id → {el, x, bottom, scale}
 };
 
 // ═══ 启动 ═══
 async function boot() {
   try {
-    const r = await fetch('/static/assets/game-meta.json');
+    const r = await fetch('/api/game/stories');
     STORY_META = await r.json();
   } catch { STORY_META = null; }
   $('#health-note').textContent = STORY_META ? '● 语音房已就绪（Haiku × Qwen-TTS）' : '◌ 剧场配置缺失';
+  renderStoryList();
+  if (STORY_META) prefetchHost(STORIES[0], 'intro');
 
   $('#btn-to-select').onclick = () => { renderPick(); show('#screen-select'); };
   $('#btn-start-game').onclick = startGame;
   $('#btn-send').onclick = submitUser;
   $('#user-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitUser(); });
+  $('#user-input').addEventListener('input', pauseCueForInput);
   $('#btn-interrupt').onclick = doInterrupt;
+  $('#btn-pause').onclick = togglePause;
   $('#btn-log').onclick = () => $('#drawer').classList.add('open');
   $('#btn-drawer-close').onclick = () => $('#drawer').classList.remove('open');
   $('#btn-leave').onclick = endMeeting;
   $('#btn-original').onclick = () => $('#modal-original').classList.add('open');
   $('#btn-orig-close').onclick = () => $('#modal-original').classList.remove('open');
-  $('#mode-toggle').onchange = (e) => { S.voiceMode = e.target.checked; };
+  $('#mode-toggle').onchange = (e) => {
+    S.voiceMode = e.target.checked;
+    if (!S.voiceMode) {
+      cancelAudioRequests();
+      if (S.audio) { try { S.audio.pause(); } catch {} }
+      if (S.stopAudio) S.stopAudio();
+    }
+  };
   $('#btn-skip-cue').onclick = () => { S.cueSkip = true; };
   setupMic();
   window.addEventListener('resize', () => layoutChars(true));
@@ -84,6 +125,12 @@ async function boot() {
   }
 }
 
+function renderStoryList() {
+  $('#story-count').textContent = `${STORIES.length}篇《论语》· 一场语音圆桌`;
+  $('#story-list-label').textContent = `今晚${STORIES.length}篇`;
+  $('#story-list').innerHTML = STORIES.map((story, index) => `<span class="ss-item">${index + 1}. ${story.title}<i>${story.source.replace('《论语·', '').replace('》', '')}</i></span>`).join('');
+}
+
 function show(id) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
   $(id).classList.add('active');
@@ -98,14 +145,13 @@ function renderPick() {
     const d = document.createElement('div');
     d.className = 'pick-card' + (id === 'kongzi' ? ' locked' : '');
     d.innerHTML = `<div class="pick-mark">✓</div>
-      <div class="pick-sprite" style="background-image:url('${SPRITE(id)}')"></div>
+      ${portrait(id, 'pick-sprite')}
       <div class="pk-name" style="color:${c.color}">${c.name}</div>
       <div class="pk-tag">${c.tag}</div>`;
     // 悬停时播放雪碧图动画
     let t = null, f = 0;
     const sp = d.querySelector('.pick-sprite');
-    d.onmouseenter = () => { t = setInterval(() => { f = (f + 1) % 10; setFrame(sp, f); }, 150); };
-    d.onmouseleave = () => { clearInterval(t); setFrame(sp, 0); };
+    if (c.sprite) { d.onmouseenter = () => { t = setInterval(() => { f = (f + 1) % 10; setFrame(sp, f); }, 150); }; d.onmouseleave = () => { clearInterval(t); setFrame(sp, 0); }; }
     d.onclick = () => {
       if (id === 'kongzi') return;              // 孔子锁定主位
       if (picked.has(id)) picked.delete(id);
@@ -171,7 +217,7 @@ function mountChars() {
     el.className = 'char dimmed';
     el.innerHTML = `
       <div class="ground"></div>
-      <div class="sprite idle-breathe" style="background-image:url('${SPRITE(id)}')"></div>
+      ${portrait(id, 'sprite idle-breathe')}
       <div class="tag"><span class="mic-ico">🎙</span><b style="color:${c.color}">${c.name}</b><i>${c.tag}</i></div>`;
     el.onclick = () => cuePhilosopher(id);
     wrap.appendChild(el);
@@ -194,7 +240,11 @@ function cuePhilosopher(id) {
 async function startGame() {
   S.panel = [...$('#pick-grid')._picked];
   S.storyIdx = 0; S.transcript = []; S.userLines = [];
-  S.aborted = false; S.running = true;
+  S.storyTranscript = [];
+  S.relationshipLedger = { recent: [] };
+  S.cueActive = false; S.cuePaused = false;
+  S.aborted = false; S.paused = false; S.turnEpoch = 0; S.running = true;
+  $('#btn-pause').textContent = '⏸ 暂停';
   show('#screen-table');
   mountChars();
   runGame().catch((e) => console.error(e));
@@ -202,28 +252,48 @@ async function startGame() {
 
 async function runGame() {
   for (S.storyIdx = 0; S.storyIdx < STORIES.length && !S.aborted; S.storyIdx++) {
+    await waitIfPaused();
     const st = STORIES[S.storyIdx];
     const meta = STORY_META.stories.find((x) => x.id === st.id);
     S.escalated = false;
+    S.storyTranscript = [];
+    S.relationshipLedger = { recent: [] };
     setTheater(st, meta);
+    refreshSuggestions(st);
 
-    await hostSay(meta.host_intro);
+    await hostSpeak(st, 'intro', meta.host_intro);
+    if (STORIES[S.storyIdx + 1]) prefetchHost(STORIES[S.storyIdx + 1], 'intro');
     await circle(st, meta);                      // 第一圈
     if (S.aborted) break;
-    await userWindow(meta.host_user_cue, st);    // cue 玩家
+    refreshSuggestions(st);
+    await userWindow(st, meta);                  // cue 玩家
     if (S.aborted) break;
     S.escalated = true;                          // 议题升级
     slateUpgrade(meta);
-    await hostSay(meta.host_escalation_line);
+    refreshSuggestions(st);
+    await hostSpeak(st, 'escalation', meta.host_escalation_line);
     await circle(st, meta);                      // 第二圈
     if (S.aborted) break;
-    await hostSay(meta.host_outro);
+    await hostSpeak(st, 'outro', meta.host_outro);
+    const nextStory = STORIES[S.storyIdx + 1];
+    if (nextStory && !S.aborted) await showStoryTransition(nextStory);
   }
   if (!S.aborted) showReport();
 }
 
+async function showStoryTransition(nextStory) {
+  const transition = $('#story-transition');
+  transition.textContent = `本篇讨论结束，正在进入下一篇《${nextStory.title}》`;
+  transition.classList.add('on');
+  await sleep(3000);
+  transition.classList.remove('on');
+}
+
 function setTheater(st, meta) {
-  $('#tb-story').textContent = `第${'一二三'[S.storyIdx]}案《${st.title}》· ${st.source}`;
+  $('#tb-story').textContent = `第${S.storyIdx + 1}篇《${st.title}》· ${st.source}`;
+  $('#slate-source').textContent = st.source;
+  $('#slate-original').textContent = meta.original;
+  $('#slate-translation').textContent = meta.translation;
   $('#slate-tag').textContent = '当前议题';
   $('#slate-tag').classList.remove('upgraded');
   $('#slate-text').textContent = st.focal;
@@ -235,71 +305,112 @@ function setTheater(st, meta) {
 
 function slateUpgrade(meta) {
   const tag = $('#slate-tag');
-  tag.textContent = '议题升级';
+  tag.textContent = '换个角度';
   tag.classList.add('upgraded');
-  $('#slate-text').textContent = meta.escalation.replace(/^议题升级——/, '');
+  $('#slate-text').textContent = meta.escalation.replace(/^换个角度——/, '');
 }
 
 // 一圈轮流发言；圈中随时可被玩家插话打断
 async function circle(st, meta) {
   for (let i = 0; i < S.order.length && !S.aborted; i++) {
+    await waitIfPaused();
     const id = S.order[i];
     // 圈位边界处理插话；若正好是本位答的玩家，就算他这一轮已发言
     const responded = await drainUser(st, i);
     if (S.aborted) return;
-    if (responded === id) continue;
+    if (responded.has(id)) continue;
     const next = S.order[i + 1];
-    await speak(id, st, { prefetchNext: next });   // 预取下一位
+    const relation = i === 0
+      ? (S.escalated ? 'reconsider' : 'open_view')
+      : (i % 2 ? 'build_on' : 'challenge');
+    const replyTo = i === 0 ? '当前情境' : CAST[S.order[i - 1]].name;
+    const prefetchNext = next ? {
+      id: next,
+      relation: (i + 1) % 2 ? 'build_on' : 'challenge',
+      replyTo: CAST[id].name,
+    } : null;
+    await speak(id, st, { relation, replyTo, prefetchNext }); // 预取下一位
   }
   await drainUser(st, 0);
 }
 
-// 玩家插话排队处理：谁答？点名者 > @名字 > 圈内下一位。返回最后应答者 id
+// 玩家插话排队处理：点名时由该角色回应；未点名时随机两位角色依次回应。
 async function drainUser(st, circlePos) {
-  let last = null;
+  const responded = new Set();
   while (S.pendingUser && !S.aborted) {
+    await waitIfPaused();
     const u = S.pendingUser; S.pendingUser = null;
     pushLine('user', '你', u.text);
     S.userLines.push(u.text);
     invalidatePrefetch();
-    const responder = u.target || S.order[circlePos % S.order.length];
-    await speak(responder, st, { userText: u.text });
-    last = responder;
+    const responders = u.target
+      ? [u.target]
+      : [...S.panel].sort(() => Math.random() - 0.5).slice(0, 2);
+    for (let index = 0; index < responders.length && !S.aborted; index++) {
+      const responder = responders[index];
+      await speak(responder, st, {
+        userText: u.text,
+        relation: u.target ? 'direct_response' : (index === 0 ? 'direct_response' : 'second_response'),
+        replyTo: '玩家',
+      });
+      responded.add(responder);
+    }
   }
-  return last;
+  return responded;
 }
 
 // ═══ 单次发言（文本→动画+气泡+语音）═══
 async function speak(id, st, opts = {}) {
   const c = S.chars[id];
   if (!c) return;
+  const epoch = S.turnEpoch;
+  await waitIfPaused();
   showThink(id, true);
 
   let turn;
   const key = pfKey(id);
   if (!opts.userText && S.prefetch[key]) turn = await S.prefetch[key];
-  else turn = await fetchTurn(id, st, opts.userText);
+  else turn = await fetchTurn(id, st, opts.userText, null, opts.relation, opts.replyTo);
   delete S.prefetch[key];
   showThink(id, false);
-  if (S.aborted || !turn) return;
+  if (S.aborted || epoch !== S.turnEpoch || !turn) return;
 
   // 预取下一位的台词+语音（无插话时才有效）
   if (opts.prefetchNext && !S.pendingUser) {
-    const nid = opts.prefetchNext;
-    S.prefetch[pfKey(nid)] = fetchTurn(nid, st, null, [...S.transcript, { name: CAST[id].name, text: turn.text }]);
+    const next = opts.prefetchNext;
+    S.prefetch[pfKey(next.id, S.transcript.length + 1)] = fetchTurn(
+      next.id, st, null, [...S.storyTranscript, { who: id, name: CAST[id].name, text: turn.text }], next.relation, next.replyTo,
+    );
+  }
+
+  recordRelationship(id, turn);
+  if (turn.pass) {
+    const actionText = `【${turn.action}】`;
+    pushLine(id, CAST[id].name, actionText);
+    focusChar(id, true);
+    showBubble(id, '……', turn.action, turn.address);
+    startAnim(id);
+    await sleep(1100);
+    hideBubble();
+    stopAnim(id);
+    focusChar(id, false);
+    return;
   }
 
   pushLine(id, CAST[id].name, turn.text);
   focusChar(id, true);
-  showBubble(id, turn.text);
+  showBubble(id, turn.text, turn.action, turn.address);
   startAnim(id);
   $('#btn-interrupt').classList.add('on');
   S.interruptFlag = false;
 
   if (S.voiceMode) {
-    const wav = turn.wav || await fetchTTS(id, turn.text);
-    if (wav && !S.interruptFlag && !S.aborted) await playAudio(wav);
-    else if (!wav) await sleep(readTime(turn.text));
+    let preparedAudio = null;
+    try { preparedAudio = await (turn.audioPromise || fetchTTS(id, turn.text)); } catch {}
+    if (S.aborted || epoch !== S.turnEpoch) return;
+    if (!S.voiceMode) await typewriterWait(turn.text);
+    else if (preparedAudio && !S.interruptFlag && !S.aborted) await playAudio(preparedAudio);
+    else await sleep(readTime(turn.text));
   } else {
     await typewriterWait(turn.text);
   }
@@ -312,48 +423,124 @@ async function speak(id, st, opts = {}) {
   focusChar(id, false);
 }
 
-function pfKey(id) { return `${id}|${S.storyIdx}|${S.escalated}|${S.transcript.length}`; }
+function pfKey(id, transcriptLength = S.transcript.length) {
+  return `${id}|${S.storyIdx}|${S.escalated}|${transcriptLength}`;
+}
+
+function recordRelationship(speaker, turn) {
+  S.relationshipLedger.recent.push({ speaker, address: turn.address, move: turn.move });
+  S.relationshipLedger.recent = S.relationshipLedger.recent.slice(-6);
+}
 function invalidatePrefetch() { S.prefetch = {}; }
 
-async function fetchTurn(id, st, userText, transcriptOverride) {
+function requestOptions(controllers = S.requestControllers) {
+  const controller = new AbortController();
+  controllers.add(controller);
+  return {
+    signal: controller.signal,
+    finish: () => controllers.delete(controller),
+  };
+}
+
+function cancelAudioRequests() {
+  S.audioRequestControllers.forEach((controller) => controller.abort());
+  S.audioRequestControllers.clear();
+}
+
+function cancelRequests() {
+  S.requestControllers.forEach((controller) => controller.abort());
+  S.requestControllers.clear();
+  cancelAudioRequests();
+  S.prefetch = {};
+  S.hostPrefetch = {};
+}
+
+function isAbort(error) { return error?.name === 'AbortError'; }
+
+async function fetchTurn(id, st, userText, transcriptOverride, relation, replyTo) {
+  const request = requestOptions();
   try {
     const r = await fetch('/api/game/turn', {
       method: 'POST', headers: { 'content-type': 'application/json' },
+      signal: request.signal,
       body: JSON.stringify({
         persona: id, story: st.id, escalated: S.escalated,
-        transcript: (transcriptOverride || S.transcript).slice(-14),
+        transcript: (transcriptOverride || S.storyTranscript).slice(-14),
         user_text: userText || null,
+        relation: relation || (userText ? 'direct_response' : 'open_view'),
+        reply_to: replyTo || (userText ? '玩家' : '当前情境'),
+        panel: S.panel,
+        relationship_ledger: S.relationshipLedger,
       }),
     });
     if (!r.ok) throw new Error(await r.text());
-    const { speech } = await r.json();
-    const out = { text: speech };
-    if (S.voiceMode) out.wavP = fetchTTS(id, speech);   // 语音并行预取
-    if (out.wavP) out.wav = await out.wavP.catch(() => null);
-    return out;
+    const turn = await r.json();
+    return {
+      text: turn.speech || '', action: turn.action || '凝神不语', address: turn.address || null,
+      move: turn.move || 'build', pass: Boolean(turn.pass),
+      audioPromise: S.voiceMode && !turn.pass ? fetchTTS(id, turn.speech) : null,
+    };
   } catch (e) {
+    if (isAbort(e)) return null;
     console.error('turn failed', e);
     return { text: `（${CAST[id].name}沉吟不语）` };
+  } finally {
+    request.finish();
   }
 }
 
 async function fetchTTS(id, text) {
+  const request = requestOptions(S.audioRequestControllers);
   try {
     const r = await fetch('/api/game/tts', {
       method: 'POST', headers: { 'content-type': 'application/json' },
+      signal: request.signal,
       body: JSON.stringify({ persona: id, text }),
     });
     if (!r.ok) return null;
-    return await r.blob();
-  } catch { return null; }
+    return await prepareAudio(await r.blob());
+  } catch (e) {
+    if (!isAbort(e)) console.error('tts failed', e);
+    return null;
+  } finally {
+    request.finish();
+  }
 }
 
-function playAudio(blob) {
+function prepareAudio(blob) {
   return new Promise((resolve) => {
-    const a = new Audio(URL.createObjectURL(blob));
-    S.audio = a;
-    a.onended = a.onerror = () => { S.audio = null; resolve(); };
-    a.play().catch(() => resolve());
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve(value);
+    };
+    const timeout = setTimeout(() => finish({ audio, url }), 4000);
+    audio.oncanplaythrough = () => finish({ audio, url });
+    audio.onerror = () => { URL.revokeObjectURL(url); finish(null); };
+    audio.load();
+  });
+}
+
+function playAudio(prepared) {
+  return new Promise((resolve) => {
+    const { audio, url } = prepared;
+    S.audio = audio;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      if (S.audio === audio) S.audio = null;
+      if (S.stopAudio === finish) S.stopAudio = null;
+      URL.revokeObjectURL(url);
+      resolve();
+    };
+    S.stopAudio = finish;
+    audio.onended = audio.onerror = finish;
+    audio.play().catch(finish);
   });
 }
 
@@ -372,46 +559,127 @@ async function typewriterWait(text) {
 }
 
 // ═══ 主持人 ═══
-async function hostSay(text) {
+async function hostSpeak(st, task, fallback) {
+  const epoch = S.turnEpoch;
+  await waitIfPaused();
+  const key = hostKey(st, task);
+  const prepared = S.hostPrefetch[key] ? await S.hostPrefetch[key] : await prepareHostTurn(st, task, S.storyTranscript);
+  delete S.hostPrefetch[key];
+  if (S.aborted || epoch !== S.turnEpoch) return;
+  await hostSay(prepared?.text || fallback, prepared?.audioPromise, epoch);
+}
+
+function hostKey(st, task) { return `${st.id}|${task}`; }
+
+function prefetchHost(st, task, transcript = []) {
+  const key = hostKey(st, task);
+  if (!S.hostPrefetch[key]) S.hostPrefetch[key] = prepareHostTurn(st, task, transcript);
+  return S.hostPrefetch[key];
+}
+
+async function prepareHostTurn(st, task, transcript) {
+  const speech = await fetchHostTurn(st, task, transcript);
+  return speech ? { text: speech, audioPromise: S.voiceMode ? fetchHostTTS(speech) : null } : null;
+}
+
+async function fetchHostTurn(st, task, transcript) {
+  const request = requestOptions();
+  try {
+    const r = await fetch('/api/game/host', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      signal: request.signal,
+      body: JSON.stringify({ story: st.id, task, transcript: (transcript || []).slice(-14) }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const { speech } = await r.json();
+    return speech;
+  } catch (e) {
+    if (isAbort(e)) return undefined;
+    console.error('host turn failed', e);
+    return null;
+  } finally {
+    request.finish();
+  }
+}
+
+async function hostSay(text, audioPromise = null, epoch = S.turnEpoch) {
   if (S.aborted) return;
   pushLine('host', '主持人', text);
-  const b = $('#host-banner');
-  b.textContent = text;
-  b.classList.add('on');
+  const bannerVersion = showHostBanner(text);
   if (S.voiceMode) {
-    const wav = await fetchHostTTS(text);
-    if (wav && !S.aborted) await playAudio(wav);
+    let preparedAudio = null;
+    try { preparedAudio = await (audioPromise || fetchHostTTS(text)); } catch {}
+    if (S.aborted || epoch !== S.turnEpoch) return;
+    if (!S.voiceMode) await sleep(readTime(text) * 0.8);
+    else if (preparedAudio) await playAudio(preparedAudio);
     else await sleep(readTime(text) * 0.8);
   } else {
     await sleep(readTime(text) * 0.8);
   }
-  b.classList.remove('on');
+  hideHostBanner(bannerVersion);
+}
+
+function showHostBanner(text) {
+  const banner = $('#host-banner');
+  const version = ++S.hostBannerVersion;
+  banner.textContent = text;
+  banner.classList.remove('on');
+  void banner.offsetWidth; // Force a new transition when two host turns are adjacent.
+  banner.classList.add('on');
+  return version;
+}
+
+function hideHostBanner(version) {
+  if (version !== undefined && version !== S.hostBannerVersion) return;
+  S.hostBannerVersion += 1;
+  $('#host-banner').classList.remove('on');
 }
 
 async function fetchHostTTS(text) {
+  const request = requestOptions(S.audioRequestControllers);
   try {
     const r = await fetch('/api/game/tts', {
       method: 'POST', headers: { 'content-type': 'application/json' },
+      signal: request.signal,
       body: JSON.stringify({ persona: 'host', text }),
     });
-    return r.ok ? await r.blob() : null;
-  } catch { return null; }
+    return r.ok ? await prepareAudio(await r.blob()) : null;
+  } catch (e) {
+    if (!isAbort(e)) console.error('host tts failed', e);
+    return null;
+  } finally {
+    request.finish();
+  }
 }
 
 // cue 玩家：倒计时窗口
-async function userWindow(cueText, st) {
-  await hostSay(cueText);
+async function userWindow(st, meta) {
+  await hostSpeak(st, 'cue', meta.host_user_cue);
   const cueEl = $('#user-cue');
   cueEl.classList.add('on');
+  S.cueActive = true;
+  S.cuePaused = false;
   S.cueSkip = false;
   $('#user-input').focus();
-  for (let t = 12; t > 0; t--) {
+  for (let t = 12; t > 0;) {
     $('#cue-count').textContent = t;
     if (S.pendingUser || S.cueSkip || S.aborted) break;
+    if (S.cuePaused || S.paused) {
+      await sleep(200);
+      continue;
+    }
     await sleep(1000);
+    t--;
   }
+  S.cueActive = false;
   cueEl.classList.remove('on');
   await drainUser(st, 0);
+}
+
+function pauseCueForInput() {
+  if (!S.cueActive || !$('#user-input').value.trim()) return;
+  S.cuePaused = true;
+  $('#user-cue').classList.remove('on');
 }
 
 // ═══ 插话 / 打断 ═══
@@ -427,6 +695,15 @@ function submitUser() {
     if (hit) target = hit;
   }
   S.pendingUser = { text: text.replace(/^@\S+[\s，,：:]*/, '') || text, target };
+  S.turnEpoch += 1;
+  S.interruptFlag = true;
+  cancelRequests();
+  if (S.audio) { try { S.audio.pause(); } catch {} }
+  if (S.stopAudio) S.stopAudio();
+  $('#btn-interrupt').classList.remove('on');
+  hideBubble();
+  showThink(null, false);
+  hideHostBanner();
   if (S.cueTarget) cuePhilosopher(S.cueTarget);   // 清除点名状态
   if (S.audio || $('#btn-interrupt').classList.contains('on')) {
     // 正在发言：提示已排队（句末插入）
@@ -437,8 +714,67 @@ function submitUser() {
 
 function doInterrupt() {
   S.interruptFlag = true;
-  if (S.audio) { try { S.audio.pause(); } catch {} S.audio = null; }
+  if (S.audio) { try { S.audio.pause(); } catch {} }
+  if (S.stopAudio) S.stopAudio();
   $('#user-input').focus();
+}
+
+function togglePause() {
+  if (!S.running || S.aborted) return;
+  S.paused = !S.paused;
+  $('#btn-pause').textContent = S.paused ? '▶ 继续' : '⏸ 暂停';
+  if (S.paused) {
+    if (S.audio && !S.audio.paused) S.audio.pause();
+    return;
+  }
+  if (S.audio?.paused) S.audio.play().catch(() => {});
+  const waiters = S.pauseWaiters.splice(0);
+  waiters.forEach((resolve) => resolve());
+}
+
+async function waitIfPaused() {
+  while (S.paused && !S.aborted) {
+    await new Promise((resolve) => S.pauseWaiters.push(resolve));
+  }
+}
+
+async function refreshSuggestions(st) {
+  const list = $('#suggestion-list');
+  const storyId = st.id;
+  const request = requestOptions();
+  list.replaceChildren(Object.assign(document.createElement('span'), {
+    className: 'suggestion-loading', textContent: '正在准备三个不同的角度…',
+  }));
+  try {
+    const r = await fetch('/api/game/suggestions', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      signal: request.signal,
+      body: JSON.stringify({
+        story: storyId, escalated: S.escalated, transcript: S.storyTranscript.slice(-14),
+      }),
+    });
+    if (!r.ok) throw new Error(await r.text());
+    const { suggestions } = await r.json();
+    if (S.aborted || STORIES[S.storyIdx]?.id !== storyId) return;
+    list.replaceChildren();
+    (suggestions || []).forEach((text) => {
+      const button = document.createElement('button');
+      button.className = 'suggestion';
+      button.textContent = text;
+      button.title = text;
+      button.onclick = () => {
+        $('#user-input').value = text;
+        $('#user-input').focus();
+        pauseCueForInput();
+      };
+      list.appendChild(button);
+    });
+  } catch (e) {
+    if (!isAbort(e)) console.error('suggestions failed', e);
+    if (STORIES[S.storyIdx]?.id === storyId) list.replaceChildren();
+  } finally {
+    request.finish();
+  }
 }
 
 // ═══ 语音输入（浏览器内置识别）═══
@@ -481,8 +817,18 @@ function startAnim(id) {
   stopAnim();
   const sp = S.chars[id].el.querySelector('.sprite');
   sp.classList.remove('idle-breathe');
-  let f = 0;
-  S.animTimer = setInterval(() => { f = (f + 1) % 10; setFrame(sp, f); }, 160);
+  let frame = 0;
+  setFrame(sp, frame);
+  S.animTimer = setInterval(() => {
+    frame += 1;
+    setFrame(sp, frame);
+    if (frame === 9) {
+      clearInterval(S.animTimer);
+      S.animTimer = null;
+      setFrame(sp, 0);
+      sp.classList.add('idle-breathe');
+    }
+  }, 280);
 }
 
 function stopAnim(id) {
@@ -495,13 +841,15 @@ function stopAnim(id) {
   });
 }
 
-function showBubble(id, text) {
+function showBubble(id, text, action = '', address = null) {
   const c = S.chars[id];
   const stageR = $('#stage').getBoundingClientRect();
   const charR = c.el.getBoundingClientRect();
   const b = $('#bubble');
   $('#bubble-name').textContent = CAST[id].name;
   $('#bubble-name').style.color = CAST[id].color;
+  const addressName = CAST[address]?.name;
+  $('#bubble-meta').textContent = [action, addressName ? `回应 ${addressName}` : ''].filter(Boolean).join(' · ');
   $('#bubble-text').textContent = S.voiceMode ? text : '';
   b.classList.remove('interrupted');
   const left = Math.max(10, Math.min(charR.left - stageR.left + charR.width * 0.35, stageR.width - 360));
@@ -526,6 +874,7 @@ function showThink(id, on) {
 // ═══ 记录 ═══
 function pushLine(who, name, text) {
   S.transcript.push({ who, name, text });
+  if (S.running && S.storyIdx < STORIES.length) S.storyTranscript.push({ who, name, text });
   $('#log-count').textContent = S.transcript.length;
   const d = document.createElement('div');
   d.className = 'dr-item' + (who === 'user' ? ' dr-user' : who === 'host' ? ' dr-host' : '');
@@ -538,6 +887,8 @@ function pushLine(who, name, text) {
 // ═══ 结束 → 报告 ═══
 async function endMeeting() {
   S.aborted = true;
+  S.paused = false;
+  S.pauseWaiters.splice(0).forEach((resolve) => resolve());
   if (S.audio) { try { S.audio.pause(); } catch {} }
   showReport();
 }
@@ -574,9 +925,9 @@ async function showReport() {
   wrap.innerHTML = `
     <div class="report-card">
       <h2>哲学画像</h2>
-      <div class="report-sub">稷下·论语圆桌 · 三案听审记录</div>
+      <div class="report-sub">问道·未竟的论语 · ${STORIES.length}篇思考记录</div>
       <div class="report-top">
-        <div class="report-sprite" style="background-image:url('${SPRITE(matchId)}')"></div>
+        ${portrait(matchId, 'report-sprite')}
         <div>
           <div class="report-match">你的思路最接近<b style="color:${CAST[matchId].color}">${rep.match}</b></div>
           <div class="report-title">${rep.title || ''}</div>

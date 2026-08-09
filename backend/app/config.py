@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import json
 from pathlib import Path
+from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -13,10 +14,12 @@ CUSTOM_AGENTS_DIR = DATA_DIR / "custom_agents"
 SESSIONS_DIR = DATA_DIR / "sessions"
 CONFIG_DIR = ROOT / "config"
 LOG_DIR = ROOT / "log"
+WORKSPACE_LOG_DIR = WORKSPACE_ROOT.parent / "log"
 RULES_PATH = CONFIG_DIR / "RULES.md"
 MODELS_PATH = CONFIG_DIR / "models.json"
 API_CONFIG_PATH = CONFIG_DIR / "api_config.json"
 LOG_PATH = LOG_DIR / "serve_philosopher_agent_web.log"
+GAME_LATENCY_LOG_PATH = WORKSPACE_LOG_DIR / "game_latency.log"
 
 MAX_DOC_BYTES = 200 * 1024
 MAX_ROUNDS = 10
@@ -42,7 +45,7 @@ DEFAULT_SKILL_AGENTS = [
 
 
 def ensure_directories() -> None:
-    for path in [DATA_DIR, CUSTOM_AGENTS_DIR, SESSIONS_DIR, CONFIG_DIR, LOG_DIR]:
+    for path in [DATA_DIR, CUSTOM_AGENTS_DIR, SESSIONS_DIR, CONFIG_DIR, LOG_DIR, WORKSPACE_LOG_DIR]:
         path.mkdir(parents=True, exist_ok=True)
 
 
@@ -56,6 +59,19 @@ def setup_logging() -> None:
     file_handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
     file_handler.setFormatter(formatter)
     root_logger.addHandler(file_handler)
+    latency_logger = logging.getLogger("game_latency")
+    latency_logger.setLevel(logging.INFO)
+    latency_logger.propagate = False
+    if not any(isinstance(handler, logging.FileHandler) and handler.baseFilename == str(GAME_LATENCY_LOG_PATH) for handler in latency_logger.handlers):
+        latency_handler = logging.FileHandler(GAME_LATENCY_LOG_PATH, encoding="utf-8")
+        latency_handler.setFormatter(logging.Formatter("%(asctime)s %(message)s"))
+        latency_logger.addHandler(latency_handler)
+
+
+def log_game_latency(event: str, **fields: Any) -> None:
+    """Write privacy-safe game timing fields as one JSON line."""
+    record = {"event": event, **fields}
+    logging.getLogger("game_latency").info(json.dumps(record, ensure_ascii=False, separators=(",", ":")))
 
 
 def load_api_config() -> dict[str, str]:

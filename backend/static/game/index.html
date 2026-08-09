@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>稷下 · 论语圆桌</title>
+<title>问道·未竟的论语</title>
 <link rel="stylesheet" href="/static/game/game.css">
 </head>
 <body>
@@ -11,12 +11,12 @@
 <!-- ═══ 开始页 ═══ -->
 <section id="screen-start" class="screen active">
   <div class="start-card">
-    <div class="start-seal">稷下</div>
-    <h1>稷下 · 论语圆桌</h1>
+    <div class="start-seal">问道</div>
+    <h1>问道·未竟的论语</h1>
     <p class="start-sub">让《论语》重新吵起来</p>
     <div class="start-rule"></div>
     <p class="start-desc">
-      三桩公案 · 一场语音圆桌<br>
+      <span id="story-count">十篇《论语》· 一场语音圆桌</span><br>
       孔子在场，反对过他的人也在场。<br>
       <b>你随时可以开口。</b>
     </p>
@@ -31,10 +31,8 @@
     <h2>请入席 <span class="select-hint">选 2–4 位同桌 · 孔子已在主位</span></h2>
     <div class="pick-grid" id="pick-grid"></div>
     <div class="select-stories">
-      <span class="ss-label">今晚三案</span>
-      <span class="ss-item">① 一只羊<i>子路 13.18</i></span>
-      <span class="ss-item">② 门口的仇人<i>宪问 14.34</i></span>
-      <span class="ss-item">③ 三年之丧<i>阳货 17.21</i></span>
+      <span class="ss-label" id="story-list-label">今晚十篇</span>
+      <span id="story-list"></span>
     </div>
     <button class="btn-primary" id="btn-start-game" disabled>开始圆桌</button>
   </div>
@@ -44,7 +42,7 @@
 <section id="screen-table" class="screen">
   <header class="topbar">
     <div class="tb-left">
-      <span class="tb-logo">稷下 · 论语圆桌</span>
+      <span class="tb-logo">问道·未竟的论语</span>
       <span class="tb-story" id="tb-story"></span>
     </div>
     <div class="tb-right">
@@ -52,6 +50,7 @@
         <input type="checkbox" id="mode-toggle" checked>
         <span class="ms-track"><span class="ms-voice">🔊 语音房</span><span class="ms-text">💬 文字</span></span>
       </label>
+      <button class="tb-btn" id="btn-pause">⏸ 暂停</button>
       <button class="tb-btn" id="btn-log">📜 对话记录 <b id="log-count">0</b></button>
       <button class="tb-btn tb-leave" id="btn-leave">结束会议</button>
     </div>
@@ -63,9 +62,14 @@
       <div class="slate" id="slate">
         <div class="slate-rod"></div>
         <div class="slate-body">
+          <div class="slate-reading">
+            <div class="slate-source" id="slate-source"></div>
+            <div class="slate-original" id="slate-original"></div>
+            <div class="slate-translation" id="slate-translation"></div>
+          </div>
           <div class="slate-tag" id="slate-tag">当前议题</div>
           <div class="slate-text" id="slate-text"></div>
-          <button class="slate-orig" id="btn-original">📖 查看原文</button>
+          <button class="slate-orig" id="btn-original">📖 阅读提示</button>
         </div>
         <div class="slate-rod slate-rod-b"></div>
       </div>
@@ -76,8 +80,9 @@
     <main class="stage" id="stage">
       <div class="stage-bg"></div>
       <div class="host-banner" id="host-banner"></div>
+      <div class="story-transition" id="story-transition"></div>
       <div id="chars"></div>
-      <div class="bubble" id="bubble"><div class="bubble-name" id="bubble-name"></div><div class="bubble-text" id="bubble-text"></div></div>
+      <div class="bubble" id="bubble"><div class="bubble-name" id="bubble-name"></div><div class="bubble-meta" id="bubble-meta"></div><div class="bubble-text" id="bubble-text"></div></div>
       <div class="think" id="think">…</div>
       <div class="user-cue" id="user-cue">
         <span>轮到你了</span><i id="cue-count">10</i>
@@ -87,10 +92,13 @@
   </div>
 
   <footer class="inputbar">
-    <button class="mic" id="btn-mic" title="语音发言（按一下开始/结束）">🎤</button>
-    <input id="user-input" type="text" maxlength="120" placeholder="随时插话；点击场上的哲学家可点名提问…" autocomplete="off">
-    <button class="btn-send" id="btn-send">发言</button>
-    <button class="btn-interrupt" id="btn-interrupt">✋ 打断</button>
+    <div class="suggestion-list" id="suggestion-list" aria-label="推荐发言"></div>
+    <div class="input-row">
+      <input id="user-input" type="text" maxlength="120" placeholder="随时插话；点击场上的哲学家可点名提问…" autocomplete="off">
+      <button class="mic" id="btn-mic" title="语音发言（按一下开始/结束）">🎤</button>
+      <button class="btn-send" id="btn-send">发言</button>
+      <button class="btn-interrupt" id="btn-interrupt">✋ 打断</button>
+    </div>
   </footer>
 
   <!-- 对话记录抽屉 -->

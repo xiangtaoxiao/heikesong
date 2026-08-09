@@ -1,0 +1,19 @@
+{
+  "tts_model": "qwen3-tts-flash",
+  "default_voice": "Neil",
+  "voices": {
+    "moderator": "Cherry",
+    "confucius": "Eldric Sage",
+    "laozi": "Eldric Sage",
+    "hanfeizi": "Vincent",
+    "zhuangzi": "Moon",
+    "socrates": "Eldric Sage",
+    "kant": "Neil",
+    "aristotle": "Peter",
+    "mozi": "Andre",
+    "nietzsche": "Eric",
+    "plato": "Katerina",
+    "sartre": "Jada",
+    "wangyangming": "Nofish"
+  }
+}

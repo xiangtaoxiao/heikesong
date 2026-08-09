@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import logging
+import time
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import DEFAULT_MODEL_ID, ROOT, ensure_directories, setup_logging
+from .config import DEFAULT_MODEL_ID, ROOT, ensure_directories, log_game_latency, setup_logging
 from .dialogue_runner import DialogueRunner
 from .schemas import AgentDocRequest, AgentManifest, ModelConfig, StartSessionRequest, UpsertAgentRequest
 from .storage import (
@@ -40,6 +41,26 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def log_game_api_latency(request: Request, call_next):
+    if not request.url.path.startswith("/api/game/"):
+        return await call_next(request)
+    started = time.perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        log_game_latency(
+            "api_request",
+            path=request.url.path,
+            method=request.method,
+            status_code=status_code,
+            elapsed_ms=round((time.perf_counter() - started) * 1000),
+        )
 
 
 if STATIC_DIR.exists():
