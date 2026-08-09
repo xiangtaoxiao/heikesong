@@ -848,8 +848,7 @@ function showBubble(id, text, action = '', address = null) {
   const b = $('#bubble');
   $('#bubble-name').textContent = CAST[id].name;
   $('#bubble-name').style.color = CAST[id].color;
-  const addressName = CAST[address]?.name;
-  $('#bubble-meta').textContent = [action, addressName ? `回应 ${addressName}` : ''].filter(Boolean).join(' · ');
+  $('#bubble-meta').textContent = action;
   $('#bubble-text').textContent = S.voiceMode ? text : '';
   b.classList.remove('interrupted');
   const left = Math.max(10, Math.min(charR.left - stageR.left + charR.width * 0.35, stageR.width - 360));

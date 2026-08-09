@@ -301,6 +301,16 @@ def _validated_host_speech(content: str) -> str:
     return speech
 
 
+def _opening_speech(story: dict) -> str:
+    """Return the reviewed text verbatim before the opening discussion question."""
+    return (
+        f"《{story['title']}》·{story['source']}。\n"
+        f"原文：{story['original']}\n"
+        f"译文：{story['translation']}\n"
+        f"请想一想：{story['focal']}"
+    )
+
+
 def _suggestion_prompt(story_id: str, escalated: bool, transcript: list[dict], attempt: int) -> str:
     story = STORIES[story_id]
     focus = story["escalation"] if escalated else story["focal"]
@@ -378,9 +388,14 @@ def game_host(payload: dict) -> dict:
     task = payload.get("task")
     if story_id not in STORIES or task not in HOST_TASKS:
         raise HTTPException(status_code=400, detail="unknown story or host task")
+    story = STORIES[story_id]
+    if task == "intro":
+        speech = _opening_speech(story)
+        log_game_latency("game_host", story=story_id, task=task, fallback=False, deterministic=True, elapsed_ms=round((time.perf_counter() - started) * 1000))
+        return {"speech": speech}
     base, key, model = _api()
     transcript = payload.get("transcript") or []
-    fallback = STORIES[story_id][HOST_FALLBACKS[task]]
+    fallback = story[HOST_FALLBACKS[task]]
     try:
         raw = _post_json(f"{base}/chat/completions", key, {
             "model": model,
@@ -449,7 +464,7 @@ def game_tts(payload: dict) -> Response:
     audio = _post_json(f"{base}/audio/speech", key, {
         "model": VOICE_CONFIG["tts_model"],
         "voice": voice,
-        "input": text[:280],
+        "input": text,
         "speed": speed,
     }, timeout=60)
     if audio[:1] == b"{":  # 上游把错误当 JSON 返回
