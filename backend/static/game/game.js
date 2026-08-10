@@ -89,13 +89,6 @@ const STORIES = [
   { id: 's1', title: '一只羊',     source: '《论语·子路》13.18', focal: '这个儿子做对了吗？' },
   { id: 's2', title: '门口的仇人', source: '《论语·宪问》14.34', focal: '该怎么对待伤害过你的人？' },
   { id: 's3', title: '三年之丧',   source: '《论语·阳货》17.21', focal: '宰予错了吗？' },
-  { id: 's4', title: '己欲立而立人', source: '《论语·雍也》6.30', focal: '成全别人，是仁，还是负担？' },
-  { id: 's5', title: '颜回陋巷', source: '《论语·雍也》6.11', focal: '贫困中的安乐，应被赞美吗？' },
-  { id: 's6', title: '阳货之避', source: '《论语·阳货》17.1', focal: '周旋是妥协，还是保全？' },
-  { id: 's7', title: '陈蔡绝粮', source: '《论语·卫灵公》15.2', focal: '绝境中如何守住理想？' },
-  { id: 's8', title: '孔子见南子', source: '《论语·雍也》6.28', focal: '本心清白，够不够？' },
-  { id: 's9', title: '三人行必有我师', source: '《论语·述而》7.22', focal: '学习怎样不盲从？' },
-  { id: 's10', title: '乘桴浮于海', source: '《论语·公冶长》5.7', focal: '道路不通时如何选择？' },
 ];
 let STORY_META = {};
 
@@ -236,7 +229,7 @@ function renderStorySummary() {
   if (count) count.textContent = `${STORIES.length}篇《论语》· 一场语音圆桌`;
   const list = $('#story-list');
   if (!list) return;
-  list.innerHTML = `<span class="ss-label">今晚十篇</span>${STORIES.map((story, index) =>
+  list.innerHTML = `<span class="ss-label">今晚三篇</span>${STORIES.map((story, index) =>
     `<span class="ss-item"><em>${index + 1}.</em> ${story.title}<i>${story.source.replace(/[《》]/g, '')}</i></span>`
   ).join('')}`;
 }
@@ -410,7 +403,7 @@ async function fetchWelcome() {
     const r = await fetch('/api/game/welcome', { method: 'POST' });
     if (!r.ok) throw new Error('bad');
     return (await r.json()).speech;
-  } catch { return '各位贤者，晚上好。今晚咱们聊几桩《论语》里吵了两千年的旧事，诸位随意开口。'; }
+  } catch { return '各位请坐。今晚只聊三样东西：一只羊、一道门、三年时间。东西不大，问题一个比一个难。'; }
 }
 
 async function runGame() {
@@ -653,7 +646,7 @@ async function circle(st, meta) {
     S.grabbed = null;
     pool.splice(pool.indexOf(id), 1);
     const previous = lastActualPhilosopher();
-    const relation = pos === 0 ? (S.escalated ? 'reconsider' : 'open_view') : (pos % 2 ? 'build_on' : 'challenge');
+    const relation = relationForPosition(pos);
     await speak(id, st, {
       relation,
       replyTo: previous ? CAST[previous].name : '当前情境',
@@ -661,12 +654,21 @@ async function circle(st, meta) {
       pickNext: pool.length ? (text) => {
         const nid = grabMic(pool, text);
         S.grabbed = nid;
-        return { id: nid, relation: (pos + 1) % 2 ? 'build_on' : 'challenge', replyTo: CAST[id].name };
+        return { id: nid, relation: relationForPosition(pos + 1), replyTo: CAST[id].name };
       } : null,
     });
     pos++;
   }
   if (!S.skipStory) await drainUser(st, 0);
+}
+
+// 每篇只安排两个轻喜剧节拍：第一圈第三位善意拆台，第二圈第二位回收前文梗。
+// 其余轮次仍以承接和挑战为主，避免整桌人都在抢着讲笑话。
+function relationForPosition(pos) {
+  if (pos === 0) return S.escalated ? 'reconsider' : 'open_view';
+  if (!S.escalated && pos === 2) return 'gentle_tease';
+  if (S.escalated && pos === 1) return 'callback';
+  return pos % 2 ? 'build_on' : 'challenge';
 }
 
 async function drainUser(st, circlePos) {
