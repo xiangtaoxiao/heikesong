@@ -161,6 +161,19 @@ def _post_json(url: str, key: str, payload: dict, timeout: int = 90, operation: 
         )
 
 
+def _get_json(url: str, key: str, timeout: int = 15) -> bytes:
+    curl = shutil.which("curl")
+    result = subprocess.run(
+        [curl, "--silent", "--show-error", "--fail-with-body", "--max-time", str(timeout),
+         "-H", f"Authorization: Bearer {key}",
+         "-H", "User-Agent: Mozilla/5.0 curl-game-client/1.0", url],
+        capture_output=True, timeout=timeout + 5,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.decode("utf-8", "replace")[:160])
+    return result.stdout
+
+
 # ---------- 发言 ----------
 
 @router.get("/api/game/stories")
@@ -670,6 +683,26 @@ def game_turn(payload: dict) -> dict:
 WELCOME_FALLBACK = "各位贤者，晚上好。今晚咱们不讲大道理，就聊《论语》里几桩吵了两千年也没吵完的旧事——诸位随意开口，说错了也不打紧。"
 
 
+@router.get("/api/game/health")
+def game_health() -> dict:
+    """上游可用性 + 剩余额度。key 耗尽时前端要能立刻说清原因，而不是静默无声。"""
+    try:
+        base, key, model = _api()
+    except HTTPException:
+        return {"ok": False, "reason": "api_config 未配置"}
+    try:
+        sub = json.loads(_get_json(f"{base}/dashboard/billing/subscription", key))
+        used = json.loads(_get_json(f"{base}/dashboard/billing/usage", key)).get("total_usage", 0) / 100
+        limit = float(sub.get("hard_limit_usd") or 0)
+        left = round(limit - used, 2)
+        return {"ok": left > 0.5, "model": model, "limit_usd": limit,
+                "used_usd": round(used, 2), "left_usd": left,
+                "reason": "" if left > 0.5 else "额度已用尽"}
+    except Exception as exc:
+        LOGGER.warning("health check failed: %s", exc)
+        return {"ok": True, "model": model, "left_usd": None, "reason": ""}
+
+
 @router.post("/api/game/welcome")
 def game_welcome() -> dict:
     """开场问候：与具体故事无关，只欢迎诸位并说明今晚要做什么。"""
@@ -788,7 +821,8 @@ def game_tts(payload: dict) -> Response:
         "speed": speed,
     }, timeout=60)
     if audio[:1] == b"{":  # 上游把错误当 JSON 返回
-        raise HTTPException(status_code=502, detail=audio.decode("utf-8", "replace")[:200])
+        body = audio.decode("utf-8", "replace")[:200]
+        raise HTTPException(status_code=402 if "额度" in body or "quota" in body.lower() else 502, detail=body)
     return Response(content=audio, media_type="audio/wav")
 
 

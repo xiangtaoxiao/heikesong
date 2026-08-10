@@ -123,6 +123,17 @@ async function boot() {
     STORY_META = await r.json();
   } catch { STORY_META = null; }
   $('#health-note').textContent = STORY_META ? '● 语音房已就绪（Haiku × Qwen-TTS）' : '◌ 剧场配置缺失';
+  fetch('/api/game/health').then((r) => r.json()).then((h) => {
+    if (!h) return;
+    const left = h.left_usd;
+    if (h.ok === false) {
+      $('#health-note').textContent = `◌ 上游不可用：${h.reason || '未知'}——语音与对话将退化为预置内容`;
+      S.audioUnavailable = true;
+    } else if (typeof left === 'number') {
+      $('#health-note').textContent = `● 语音房已就绪（Haiku × Qwen-TTS）· 剩余额度 $${left}`
+        + (left < 5 ? '（偏低，注意随时可能用尽）' : '');
+    }
+  }).catch(() => {});
   renderStorySummary();
 
   $('#btn-to-select').onclick = () => { renderPick(); show('#screen-select'); };
@@ -805,15 +816,39 @@ async function fetchTurn(id, st, userText, transcriptOverride, relation, replyTo
   }
 }
 
+function noteAudioFailure(detail = '') {
+  S.ttsFailures = (S.ttsFailures || 0) + 1;
+  if (S.ttsFailures < 2 || S.audioUnavailable) return;
+  S.audioUnavailable = true;                       // 后续一律走文字模式，避免整局静音
+  const quota = /额度|quota|402/.test(detail);
+  showSystemNotice(quota
+    ? '语音额度已用尽——已自动切换为文字模式，对话照常进行'
+    : '语音服务暂时不可用——已自动切换为文字模式');
+}
+
+function showSystemNotice(text) {
+  let el = document.querySelector('#sys-notice');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sys-notice';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.classList.add('on');
+  clearTimeout(S.noticeTimer);
+  S.noticeTimer = setTimeout(() => el.classList.remove('on'), 9000);
+}
+
 async function fetchTTS(id, text) {
   try {
     const r = await fetch('/api/game/tts', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ persona: id, text }),
     });
-    if (!r.ok) return null;
+    if (!r.ok) { noteAudioFailure(String(r.status) + (await r.text().catch(() => ''))); return null; }
+    S.ttsFailures = 0;
     return await r.blob();
-  } catch { return null; }
+  } catch (e) { noteAudioFailure(''); return null; }
 }
 
 function playAudio(blob) {
@@ -839,7 +874,7 @@ function playAudio(blob) {
   });
 }
 
-function canPlayAudio() { return !S.audioMuted; }
+function canPlayAudio() { return !S.audioMuted && !S.audioUnavailable; }
 function stopCurrentAudio() {
   if (S.audio) { try { S.audio.pause(); } catch {} }
   if (S.finishAudio) S.finishAudio();
@@ -914,8 +949,10 @@ async function fetchHostTTS(text) {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ persona: 'host', text }),
     });
-    return r.ok ? await r.blob() : null;
-  } catch { return null; }
+    if (!r.ok) { noteAudioFailure(String(r.status) + (await r.text().catch(() => ''))); return null; }
+    S.ttsFailures = 0;
+    return await r.blob();
+  } catch (e) { noteAudioFailure(''); return null; }
 }
 
 // ═══ cue 玩家（挂牌落在玩家头顶）═══

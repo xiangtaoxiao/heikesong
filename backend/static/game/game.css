@@ -469,3 +469,13 @@ button { font-family: var(--serif); cursor: pointer; }
 .story-deck.topic-page .deck-copy::before,
 .story-deck.topic-page .deck-copy::after { content: ''; width: clamp(60px, 12vw, 150px); height: 1px;
   background: linear-gradient(90deg, transparent, rgba(140,110,60,.65), transparent); margin: 14px 0; }
+
+
+/* 系统提示条：语音不可用等重要状态，必须让玩家看见，而不是静默失败 */
+#sys-notice { position: fixed; left: 50%; top: 58px; transform: translateX(-50%) translateY(-14px);
+  z-index: 90; max-width: 78vw; padding: 10px 22px; border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,251,240,.98), rgba(246,238,220,.98));
+  border: 1px solid rgba(150,115,60,.6); border-left: 4px solid var(--terra);
+  box-shadow: 0 6px 20px rgba(50,38,18,.28); font-size: 14px; letter-spacing: .5px; color: #4a3f2c;
+  opacity: 0; pointer-events: none; transition: opacity .3s, transform .3s; }
+#sys-notice.on { opacity: 1; transform: translateX(-50%) translateY(0); }
