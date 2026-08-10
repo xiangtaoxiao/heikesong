@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>稷下 · 论语圆桌</title>
-<link rel="stylesheet" href="/static/game/game.css?v=20260810-deckB6-content">
+<link rel="stylesheet" href="/static/game/game.css?v=20260810-speak1">
 </head>
 <body>
 
@@ -99,7 +99,7 @@
     <div class="bubble" id="bubble"><div class="bubble-name" id="bubble-name"></div><div class="bubble-text" id="bubble-text"></div></div>
     <div class="think" id="think"></div>
     <div class="user-cue" id="user-cue">
-      <span>轮到你了</span><i id="cue-count">15</i>
+      <span>轮到你了</span><i id="cue-count">60 秒</i>
       <button id="btn-skip-cue">跳过</button>
     </div>
   </main>
@@ -108,8 +108,12 @@
     <div class="speech-tray" id="speech-tray" aria-hidden="true">
       <div class="suggestion-list" id="suggestion-list" aria-label="推荐发言"></div>
       <div class="utterance-box">
-        <button class="dock-control mic" id="btn-mic" title="语音发言（按一下开始/结束）"><span class="control-signet">语音</span></button>
-        <input id="user-input" type="text" maxlength="120" placeholder="说出你的想法；点击哲学家可点名提问…" autocomplete="off">
+        <button class="dock-control mic" id="btn-mic" title="语音发言（点一下开始，说完点结束）"><span class="control-signet" id="mic-label">语音</span></button>
+        <div class="input-shell" id="input-shell">
+          <span class="rec-badge" id="rec-badge">录音中<b id="rec-time">0:00</b></span>
+          <span class="mention-chip" id="mention-chip"><b id="mention-name"></b><i id="mention-clear" title="取消点名">✕</i></span>
+          <input id="user-input" type="text" maxlength="120" placeholder="说出你的想法；点击哲学家可点名提问…" autocomplete="off">
+        </div>
         <button class="dock-control btn-send" id="btn-send">发送</button>
         <button class="dock-control btn-interrupt" id="btn-interrupt">打断</button>
         <button class="tray-close" id="btn-speech-close" title="收起发言区">收起</button>
@@ -163,6 +167,6 @@
   </div>
 </section>
 
-<script src="/static/game/game.js?v=20260810-deckB6-content"></script>
+<script src="/static/game/game.js?v=20260810-speak1"></script>
 </body>
 </html>
