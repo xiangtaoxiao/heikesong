@@ -7,16 +7,21 @@
 """
 from __future__ import annotations
 
+from io import BytesIO
 import json
 import logging
+import os
 import re
 import shutil
 import subprocess
 import tempfile
 import time
+from urllib.parse import quote, urlsplit
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+import qrcode
+from cryptography.fernet import Fernet, InvalidToken
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import FileResponse, Response
 
 from .config import CONFIG_DIR, ROOT, SKILLS_DIR, load_api_config, log_game_latency
@@ -773,6 +778,114 @@ def game_tts(payload: dict) -> Response:
 
 
 # ---------- 终局报告 ----------
+
+MAX_SHARE_REPORT_BYTES = 6_000
+
+
+def _share_cipher() -> Fernet:
+    secret = os.getenv("REPORT_SHARE_SECRET") or load_api_config().get("report_share_secret", "")
+    if not secret:
+        raise HTTPException(status_code=503, detail="REPORT_SHARE_SECRET is not configured")
+    try:
+        return Fernet(secret.encode("utf-8"))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=503, detail="REPORT_SHARE_SECRET is invalid") from exc
+
+
+def _share_report(payload: dict) -> dict:
+    report = payload.get("report") if isinstance(payload, dict) else None
+    if not isinstance(report, dict):
+        raise HTTPException(status_code=400, detail="report is required")
+    axes = report.get("axes")
+    if not isinstance(axes, list) or not 1 <= len(axes) <= 4:
+        raise HTTPException(status_code=400, detail="report axes are invalid")
+    normalized_axes = []
+    for axis in axes:
+        if not isinstance(axis, dict):
+            raise HTTPException(status_code=400, detail="report axis is invalid")
+        try:
+            value = max(0, min(100, int(axis.get("value", 50))))
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=400, detail="report axis value is invalid") from exc
+        normalized_axes.append({key: str(axis.get(key, ""))[:32] for key in ("name", "left", "right")} | {"value": value})
+    normalized = {
+        "v": 1,
+        "axes": normalized_axes,
+        "match": str(report.get("match", "老子"))[:24],
+        "title": str(report.get("title", "知者不言"))[:48],
+        "text": str(report.get("text", ""))[:1_600],
+        "quote": str(report.get("quote", ""))[:600],
+    }
+    encoded = json.dumps(normalized, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    if len(encoded) > MAX_SHARE_REPORT_BYTES:
+        raise HTTPException(status_code=400, detail="report is too large to share")
+    return normalized
+
+
+def _share_token(report: dict) -> str:
+    import zlib
+    return _share_cipher().encrypt(zlib.compress(json.dumps(report, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))).decode("ascii")
+
+
+def _read_share_token(token: str) -> dict:
+    import zlib
+    if not token or len(token) > 12_000:
+        raise HTTPException(status_code=400, detail="share token is invalid")
+    try:
+        decoded = zlib.decompress(_share_cipher().decrypt(token.encode("ascii")))
+        if len(decoded) > MAX_SHARE_REPORT_BYTES:
+            raise ValueError("share report too large")
+        return _share_report({"report": json.loads(decoded)})
+    except (InvalidToken, UnicodeEncodeError, UnicodeDecodeError, ValueError, json.JSONDecodeError, zlib.error) as exc:
+        raise HTTPException(status_code=400, detail="share link is invalid or expired") from exc
+
+
+def _valid_share_origin(value: str) -> str:
+    try:
+        parsed = urlsplit(value.strip())
+    except (AttributeError, ValueError):
+        return ""
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or parsed.username or parsed.password:
+        return ""
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _request_origin(request: Request) -> str:
+    forwarded_host = request.headers.get("x-forwarded-host", "").split(",", 1)[0].strip()
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",", 1)[0].strip()
+    host = forwarded_host or request.headers.get("host", "")
+    scheme = forwarded_proto or request.url.scheme
+    origin = _valid_share_origin(f"{scheme}://{host}")
+    return origin or str(request.base_url).rstrip("/")
+
+
+def _share_url(request: Request, token: str, origin: str = "") -> str:
+    project_origin = _valid_share_origin(origin) or _request_origin(request)
+    return f"{project_origin}/game?report={quote(token, safe='')}"
+
+
+@router.post("/api/game/share")
+def create_game_share(payload: dict, request: Request) -> dict:
+    token = _share_token(_share_report(payload))
+    origin = str(payload.get("origin", "")) if isinstance(payload, dict) else ""
+    return {"token": token, "url": _share_url(request, token, origin)}
+
+
+@router.get("/api/game/share")
+def read_game_share(token: str) -> dict:
+    return {"report": _read_share_token(token)}
+
+
+@router.get("/api/game/share/qr")
+def game_share_qr(token: str, request: Request, origin: str = "") -> Response:
+    _read_share_token(token)
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, box_size=10, border=4)
+    qr.add_data(_share_url(request, token, origin))
+    qr.make(fit=True)
+    image = qr.make_image(fill_color="#293b35", back_color="#eadbbd")
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return Response(output.getvalue(), media_type="image/png", headers={"Cache-Control": "private, max-age=300"})
 
 @router.post("/api/game/report")
 def game_report(payload: dict) -> dict:

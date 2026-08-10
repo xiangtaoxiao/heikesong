@@ -114,6 +114,7 @@ const S = {
   animTimer: null,
   prefetch: {}, chars: {},
   lastSpeakers: [], skipTurn: false, skipStory: false, deckPage: 0, deckBeats: [],
+  report: null, shareToken: null, shareUrl: null,
 };
 
 // ═══ 启动 ═══
@@ -166,6 +167,12 @@ async function boot() {
   });
   setupMic();
   window.addEventListener('resize', () => layoutChars(true));
+
+  const sharedToken = new URLSearchParams(location.search).get('report');
+  if (sharedToken) {
+    await showSharedReport(sharedToken);
+    return;
+  }
 
   // 开发直达：#select / #table=kongzi,socrates（只摆台）/ 加 demo=speech 演示发言
   const h = location.hash;
@@ -1120,9 +1127,29 @@ function pushLine(who, name, text) {
   if (S.running && S.storyIdx < STORIES.length) S.storyTranscript.push(line);
   $('#log-count').textContent = S.transcript.length;
   const d = document.createElement('div');
-  d.className = 'dr-item' + (who === 'user' ? ' dr-user' : who === 'host' ? ' dr-host' : '');
+  d.className = 'dr-item' + (who === 'user' ? ' dr-user' : who === 'host' ? ' dr-host' : ' dr-philosopher');
   const color = CAST[who]?.color || (who === 'user' ? '#33566b' : '#6b705c');
-  d.innerHTML = `<div class="dr-name" style="color:${color}">${name}</div><div class="dr-text">${text}</div>`;
+  d.style.setProperty('--dr-accent', color);
+  const avatar = document.createElement('div');
+  avatar.className = 'dr-avatar';
+  if (who === 'host') {
+    avatar.classList.add('dr-avatar-host');
+    avatar.style.backgroundImage = "url('/static/assets/ui/host-avatar.png')";
+  } else {
+    avatar.classList.add('dr-avatar-sprite');
+    avatar.style.backgroundImage = `url('${SPRITE(who === 'user' ? 'player' : who)}')`;
+  }
+  avatar.setAttribute('aria-label', `${name}头像`);
+
+  const speaker = document.createElement('div');
+  speaker.className = 'dr-name';
+  speaker.style.color = color;
+  speaker.textContent = name;
+
+  const content = document.createElement('div');
+  content.className = 'dr-text';
+  content.textContent = text;
+  d.append(avatar, speaker, content);
   $('#drawer-body').appendChild(d);
   $('#drawer-body').scrollTop = 1e6;
 }
@@ -1166,31 +1193,168 @@ async function showReport() {
     text: '报告生成失败——但老子说，知者不言。你就当被夸了。',
     quote: '「知者不言，言者不知。」——《道德经》56章',
   };
-  const matchId = Object.keys(CAST).find((k) => CAST[k].name === rep.match) || 'laozi';
+  renderReport(rep);
+}
+
+function fallbackReport() {
+  return {
+    axes: [
+      { name: '情理轴', left: '重情', right: '重法', value: 50 },
+      { name: '知行轴', left: '追问', right: '笃行', value: 50 },
+      { name: '应世轴', left: '有为', right: '无为', value: 50 },
+      { name: '常变轴', left: '守常', right: '达变', value: 50 },
+    ],
+    match: '老子', title: '知者不言',
+    text: '报告生成失败——但老子说，知者不言。你就当被夸了。',
+    quote: '「知者不言，言者不知。」——《道德经》56章',
+  };
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+}
+
+function reportMatchId(rep) {
+  return Object.keys(CAST).find((key) => CAST[key].name === rep.match) || 'laozi';
+}
+
+function renderReport(rep, token = null) {
+  const wrap = $('#report-wrap');
+  const matchId = reportMatchId(rep);
+  const axes = (rep.axes || []).slice(0, 4).map((axis) => ({ ...axis, value: Math.max(0, Math.min(100, Number(axis.value) || 50)) }));
+  S.report = { ...rep, axes };
+  S.shareToken = token;
+  S.shareUrl = null;
   wrap.innerHTML = `
     <div class="report-scroll">
       <div class="report-card">
-        <h2>哲学画像</h2>
-        <div class="report-sub">稷下·论语圆桌 · 听审记录</div>
-        <div class="report-top">
+        <header class="report-head">
+          <h2>哲学画像</h2>
+          <div class="report-sub">一份由你的发言生成的听审记录</div>
+        </header>
+        <section class="report-hero">
           <div class="report-sprite" style="background-image:url('${SPRITE(matchId)}')"></div>
-          <div>
-            <div class="report-match">你的思路最接近<b style="color:${CAST[matchId].color}">${rep.match}</b></div>
-            <div class="report-title">${rep.title || ''}</div>
+          <div class="report-identity">
+            <div class="report-match">你的思路最接近<b style="color:${CAST[matchId].color}">${escapeHtml(rep.match)}</b></div>
+            <div class="report-title">${escapeHtml(rep.title || '')}</div>
           </div>
-        </div>
-        ${(rep.axes || []).map((a) => `
+        </section>
+        <section class="report-section report-axes" aria-label="思考坐标">
+          <h3>你的思考坐标</h3>
+          ${axes.map((a) => `
           <div class="axis">
-            <div class="axis-labels"><b>${a.left}</b><span>${a.name}</span><b>${a.right}</b></div>
+            <div class="axis-labels"><b>${escapeHtml(a.left)}</b><span>${escapeHtml(a.name)}</span><b>${escapeHtml(a.right)}</b></div>
             <div class="axis-bar"><div class="axis-dot" style="left:${a.value}%"></div></div>
           </div>`).join('')}
-        <div class="report-text">${rep.text || ''}</div>
-        ${rep.quote ? `<div class="report-quote">${rep.quote}</div>` : ''}
+        </section>
+        <section class="report-section report-reading">
+          <h3>主持人评语</h3>
+          <div class="report-text">${escapeHtml(rep.text || '')}</div>
+        </section>
+        ${rep.quote ? `<blockquote class="report-quote">${escapeHtml(rep.quote)}</blockquote>` : ''}
         <div class="report-actions">
-          <button class="btn-primary" onclick="location.reload()">再来一局</button>
+          <button class="btn-ghost" id="btn-share-report">复制分享链接</button>
+          <button class="btn-ghost" id="btn-save-report">保存分享图</button>
+          <button class="btn-primary" id="btn-restart-game">再来一局</button>
         </div>
       </div>
     </div>`;
+  $('#btn-restart-game').onclick = () => location.assign('/game');
+  $('#btn-share-report').onclick = shareReport;
+  $('#btn-save-report').onclick = saveReportPoster;
+}
+
+async function showSharedReport(token) {
+  show('#screen-report');
+  const wrap = $('#report-wrap');
+  wrap.innerHTML = '<p class="report-loading">正在还原这份哲学画像…</p>';
+  try {
+    const response = await fetch(`/api/game/share?token=${encodeURIComponent(token)}`);
+    if (!response.ok) throw new Error('invalid share');
+    const payload = await response.json();
+    renderReport(payload.report, token);
+  } catch {
+    wrap.innerHTML = '<div class="report-error">这份分享链接无效、已损坏，或服务器尚未配置分享密钥。</div>';
+  }
+}
+
+async function ensureShare() {
+  if (S.shareToken) return S.shareToken;
+  const response = await fetch('/api/game/share', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ report: S.report, origin: location.origin }),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const payload = await response.json();
+  S.shareToken = payload.token;
+  S.shareUrl = payload.url;
+  return payload.token;
+}
+
+function currentShareUrl(token) {
+  const url = new URL('/game', location.origin);
+  url.searchParams.set('report', token);
+  return url.toString();
+}
+
+async function shareReport() {
+  try {
+    const token = await ensureShare();
+    const url = S.shareUrl || currentShareUrl(token);
+    await navigator.clipboard.writeText(url);
+    $('#btn-share-report').textContent = '链接已复制';
+  } catch (error) {
+    alert('分享链接创建失败。请在服务器设置 REPORT_SHARE_SECRET 后重试。');
+  }
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => { const image = new Image(); image.onload = () => resolve(image); image.onerror = reject; image.src = src; });
+}
+
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
+  const chars = [...String(text || '')]; let line = ''; let lines = 0;
+  for (const char of chars) {
+    if (ctx.measureText(line + char).width > maxWidth && line) {
+      if (lines === maxLines - 1) { ctx.fillText(`${line}…`, x, y + lines * lineHeight); return y + (lines + 1) * lineHeight; }
+      ctx.fillText(line, x, y + lines * lineHeight); line = char; lines++;
+    }
+    else line += char;
+  }
+  if (line && lines < maxLines) { ctx.fillText(line, x, y + lines * lineHeight); lines++; }
+  return y + lines * lineHeight;
+}
+
+async function saveReportPoster() {
+  try {
+    const token = await ensureShare();
+    const [qr, sprite, scroll] = await Promise.all([
+      loadImage(`/api/game/share/qr?token=${encodeURIComponent(token)}&origin=${encodeURIComponent(location.origin)}`),
+      loadImage(SPRITE(reportMatchId(S.report))), loadImage('/static/assets/ui/report-scroll-transparent.png'),
+    ]);
+    const canvas = document.createElement('canvas'); canvas.width = 1080; canvas.height = 1520;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#263d39'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(scroll, 40, 10, 1000, 1500);
+    ctx.fillStyle = '#3f3425'; ctx.font = 'bold 46px serif'; ctx.textAlign = 'center'; ctx.fillText('哲学画像', 540, 300); ctx.textAlign = 'left';
+    const role = reportMatchId(S.report); const frameW = sprite.naturalWidth / 5; const frameH = sprite.naturalHeight / 3;
+    ctx.drawImage(sprite, 0, 0, frameW, frameH, 270, 335, 150, 167);
+    ctx.fillStyle = CAST[role].color; ctx.font = 'bold 38px serif'; ctx.fillText(S.report.match, 465, 390);
+    ctx.save(); ctx.translate(465, 425); ctx.rotate(-2 * Math.PI / 180);
+    ctx.strokeStyle = '#8b4d2d'; ctx.lineWidth = 3; ctx.strokeRect(0, 0, 300, 58);
+    ctx.fillStyle = '#8b4d2d'; ctx.font = 'bold 28px serif'; ctx.fillText(S.report.title || '', 15, 39, 270); ctx.restore();
+    let y = 550; ctx.fillStyle = '#3f3425'; ctx.font = 'bold 25px serif'; ctx.fillText('你的思考坐标', 240, y); y += 42;
+    (S.report.axes || []).forEach((axis) => { ctx.fillStyle = '#6b5c40'; ctx.font = '20px serif'; ctx.fillText(`${axis.left}  ·  ${axis.name}  ·  ${axis.right}`, 240, y); y += 15; ctx.fillStyle = '#d5c9ad'; ctx.fillRect(240, y, 600, 10); ctx.fillStyle = '#3d5940'; ctx.beginPath(); ctx.arc(240 + 600 * (axis.value / 100), y + 5, 10, 0, Math.PI * 2); ctx.fill(); y += 47; });
+    ctx.fillStyle = '#3f3425'; ctx.font = 'bold 25px serif'; ctx.fillText('主持人评语', 240, y); y += 36; ctx.font = '21px serif'; y = drawWrappedText(ctx, S.report.text, 240, y, 600, 34, 5) + 20;
+    ctx.fillStyle = '#6b5c40'; ctx.font = '18px serif'; y = drawWrappedText(ctx, S.report.quote, 240, y, 600, 28, 2) + 18;
+    ctx.save(); ctx.shadowColor = 'rgba(75, 52, 29, .22)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 6;
+    ctx.fillStyle = '#eadbbd'; ctx.fillRect(447, y - 8, 186, 186); ctx.restore();
+    ctx.strokeStyle = 'rgba(122, 88, 48, .42)'; ctx.lineWidth = 2; ctx.strokeRect(447, y - 8, 186, 186);
+    ctx.drawImage(qr, 455, y, 170, 170);
+    ctx.fillStyle = '#6b5c40'; ctx.font = '18px serif'; ctx.textAlign = 'center'; ctx.fillText('扫码重访这份画像', 540, y + 195); ctx.textAlign = 'left';
+    const link = document.createElement('a'); link.download = `哲学画像-${S.report.match}.png`; link.href = canvas.toDataURL('image/png'); link.click();
+  } catch {
+    alert('分享图生成失败。请确认服务器已配置 REPORT_SHARE_SECRET。');
+  }
 }
 
 boot();

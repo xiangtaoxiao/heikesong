@@ -254,11 +254,23 @@ button { font-family: var(--serif); cursor: pointer; }
   display: flex; justify-content: space-between; align-items: center; }
 .drawer-head button { background: none; border: none; font-size: 15px; color: var(--ink-dim); }
 .drawer-body { flex: 1; overflow-y: auto; padding: 14px; }
-.dr-item { margin-bottom: 13px; }
-.dr-name { font-size: 12px; font-weight: 700; margin-bottom: 3px; }
-.dr-text { font-size: 13.5px; line-height: 1.75; background: rgba(240,233,215,.8); border-radius: 9px; padding: 8px 12px; }
-.dr-item.dr-user .dr-text { background: #e4ebef; }
-.dr-item.dr-host .dr-text { background: #efe7d7; font-size: 12.5px; color: var(--ink-dim); }
+.dr-item { display: grid; grid-template-columns: 36px minmax(0, 1fr); column-gap: 9px; margin-bottom: 13px; }
+.dr-avatar { grid-row: span 2; width: 36px; height: 36px; align-self: start; border: 1px solid rgba(104,82,51,.34); border-radius: 50%;
+  background-color: #eee5d3; background-position: center; background-repeat: no-repeat; box-shadow: 0 2px 5px rgba(58,43,22,.16); }
+.dr-avatar-sprite { background-size: 500% 300%; background-position: 0 0; }
+.dr-avatar-host { background-size: cover; }
+.dr-name { min-width: 0; font-size: 12px; font-weight: 700; margin-bottom: 3px; line-height: 1.2; }
+.dr-text { min-width: 0; font-size: 13.5px; line-height: 1.75; border: 1px solid rgba(104,82,51,.16); border-left: 4px solid var(--dr-accent, #8b7557);
+  border-radius: 9px; padding: 8px 12px; background: #f3ecdf; color: #3b3429; }
+.dr-item.dr-philosopher .dr-text { background: #f3ecdf; }
+.dr-item.dr-user .dr-text { background: #dcecf4; border-color: #93b8c8; border-left-color: #315f75; color: #183b4c; }
+.dr-item.dr-host .dr-text { background: #f7e2af; border-color: #d9a94f; border-left-color: #a6651d; font-size: 12.5px; color: #624117; }
+.dr-item.dr-user .dr-avatar { border-color: #315f75; }
+.dr-item.dr-host .dr-avatar { border-color: #a6651d; }
+@media (max-width: 480px) {
+  .dr-item { grid-template-columns: 32px minmax(0, 1fr); column-gap: 8px; }
+  .dr-avatar { width: 32px; height: 32px; }
+}
 
 .modal { position: fixed; inset: 0; background: rgba(47,52,48,.45); display: none;
   align-items: center; justify-content: center; z-index: 70; }
@@ -273,34 +285,57 @@ button { font-family: var(--serif); cursor: pointer; }
 .modal-card .btn-ghost { margin-top: 18px; }
 
 /* ═══ 报告 ═══ */
-#screen-report { align-items: center; justify-content: center; overflow-y: auto;
-  background: url('/static/assets/ui/stage-bg-a.png') center / cover; }
-.report-wrap { width: min(760px, 94vw); padding: 16px 0; }
+#screen-report { align-items: center; justify-content: center; overflow: hidden; min-height: 100vh;
+  background: url('/static/assets/ui/stage-bg-a.png') center / cover fixed; }
+.report-wrap { width: min(980px, 96vw, calc((100vh - 20px) * .666667)); aspect-ratio: 2 / 3; margin: auto; padding: 0; }
 .report-loading { text-align: center; color: #f2ead8; letter-spacing: 3px; text-shadow: 0 1px 4px rgba(0,0,0,.4); }
-.report-scroll { position: relative; padding: 7% 12% 8%;
-  background: url('/static/assets/ui/report-scroll.png') center / 100% 100% no-repeat;
+.report-scroll { position: relative; width: 100%; height: 100%; padding: 0;
+  background: url('/static/assets/ui/report-scroll-transparent.png') center / 100% 100% no-repeat;
   filter: drop-shadow(0 16px 30px rgba(20,15,8,.45)); }
-.report-card { max-height: 66vh; overflow-y: auto; padding: 4px 6px; }
-.report-card::-webkit-scrollbar { width: 4px; }
-.report-card::-webkit-scrollbar-thumb { background: #cbbc98; }
-.report-card h2 { text-align: center; font-size: 23px; letter-spacing: 8px; margin-bottom: 4px; color: #3a3020; }
-.report-sub { text-align: center; font-size: 11.5px; color: #8a7a58; letter-spacing: 2px; margin-bottom: 18px; }
-.report-top { display: flex; gap: 22px; align-items: center; margin-bottom: 18px; }
+.report-card { position: absolute; left: 18.5%; right: 18.5%; top: 16.2%; bottom: 11.4%; overflow-x: hidden; overflow-y: auto;
+  padding: 0 18px 30px; scrollbar-gutter: stable; overscroll-behavior: contain; }
+.report-card::-webkit-scrollbar { width: 6px; }
+.report-card::-webkit-scrollbar-track { background: rgba(139,117,87,.1); border-radius: 6px; }
+.report-card::-webkit-scrollbar-thumb { background: rgba(107,74,45,.45); border-radius: 6px; }
+.report-head { text-align: center; padding-bottom: 18px; border-bottom: 1px solid rgba(130,99,51,.25); }
+.report-card h2 { font-size: 28px; letter-spacing: 10px; margin-bottom: 7px; color: #3a3020; }
+.report-sub { font-size: 12px; color: #8a7a58; letter-spacing: 2px; }
+.report-hero { display: flex; gap: 28px; align-items: center; padding: 20px 4px; }
 .report-sprite { width: 150px; height: 167px; background-size: 500% 300%; background-position: 0% 0%; flex-shrink: 0; }
-.report-match { font-size: 14px; color: #6b5c40; }
+.report-identity { min-width: 0; }
+.report-match { font-size: 15px; color: #6b5c40; }
 .report-match b { font-size: 22px; letter-spacing: 3px; display: block; margin-top: 4px; }
-.report-title { display: inline-block; margin-top: 10px; transform: rotate(-2deg); border: 2px solid var(--terra);
+.report-title { display: inline-block; max-width: 100%; margin-top: 10px; transform: rotate(-2deg); border: 2px solid var(--terra);
   color: var(--terra); font-size: 17px; letter-spacing: 5px; padding: 4px 15px; border-radius: 8px; font-weight: 700; }
-.axis { margin-bottom: 13px; }
-.axis-labels { display: flex; justify-content: space-between; font-size: 12px; color: #8a7a58; margin-bottom: 5px; }
+.report-section { border-top: 1px solid rgba(130,99,51,.2); padding: 17px 0 4px; }
+.report-section h3 { color: #6b4a2d; font-size: 15px; letter-spacing: 3px; margin-bottom: 13px; }
+.axis { margin-bottom: 15px; }
+.axis-labels { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); gap: 8px; align-items: end;
+  font-size: 12px; color: #8a7a58; margin-bottom: 5px; }
+.axis-labels b:last-child { text-align: right; }
+.axis-labels span { text-align: center; white-space: nowrap; }
 .axis-labels b { color: #3a3020; }
-.axis-bar { position: relative; height: 9px; border-radius: 5px; background: linear-gradient(90deg, #dce5d3, #d3dde5); }
+.axis-bar { position: relative; width: 100%; height: 9px; border-radius: 5px; background: linear-gradient(90deg, #dce5d3, #d3dde5); }
 .axis-dot { position: absolute; top: 50%; width: 18px; height: 18px; border-radius: 50%; background: var(--sage-deep);
   border: 3px solid var(--paper); box-shadow: var(--shadow); transform: translate(-50%, -50%); transition: left 1s ease; }
-.report-text { font-size: 14.5px; line-height: 2; margin: 16px 0; color: #43392a; }
+.report-text { font-size: 15px; line-height: 2; margin: 0 0 14px; color: #43392a; white-space: pre-wrap; }
 .report-quote { background: rgba(240,233,215,.85); border-left: 3px solid var(--terra); border-radius: 8px;
-  padding: 12px 16px; font-size: 13.5px; line-height: 1.9; color: #6b5c40; }
-.report-actions { text-align: center; margin-top: 20px; }
+  padding: 12px 16px; font-size: 13.5px; line-height: 1.9; color: #6b5c40; white-space: pre-wrap; }
+.report-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 22px; }
+.report-actions .btn-primary, .report-actions .btn-ghost { min-width: 126px; }
+.report-error { margin: auto; padding: 26px; border-radius: 14px; background: #f8efdc; color: #6d4829; text-align: center; line-height: 1.8; }
+@media (max-width: 620px) {
+  .report-wrap { width: min(98vw, calc((100vh - 12px) * .666667)); }
+  .report-card { left: 17.8%; right: 17.8%; top: 16%; bottom: 11%; padding: 0 9px 24px; }
+  .report-card h2 { font-size: 24px; letter-spacing: 7px; }
+  .report-hero { gap: 12px; padding: 16px 0; }
+  .report-sprite { width: 102px; height: 114px; }
+  .report-match b { font-size: 19px; }
+  .report-title { font-size: 15px; letter-spacing: 3px; padding: 4px 10px; }
+  .report-section h3 { font-size: 14px; letter-spacing: 2px; }
+  .axis-labels { gap: 4px; font-size: 10.5px; }
+  .report-actions { flex-direction: column; align-items: stretch; }
+}
 
 /* 插画灯箱 */
 .lightbox .lightbox-inner { text-align: center; }
