@@ -1,5 +1,6 @@
 {
   "api_key": "sk-在这里填主办方发的key（问Eric要）",
   "api_base": "https://api.openai-next.com/v1",
-  "model": "claude-haiku-4-5-20251001"
+  "model": "claude-haiku-4-5-20251001",
+  "report_share_secret": "替换为Fernet.generate_key()生成的长期稳定密钥"
 }

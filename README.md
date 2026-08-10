@@ -36,6 +36,10 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 不配置 API 时会自动使用本地模拟模式。
 
+### 报告分享
+
+终局报告的加密分享链接需要配置长期稳定的 `REPORT_SHARE_SECRET` 环境变量；也可在未提交的 `api_config.json` 添加同名字段。用 `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` 生成一次并妥善保存。更换该密钥会使旧分享链接失效。
+
 ## 项目结构
 
 ```
