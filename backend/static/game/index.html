@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>问道·未竟的论语</title>
-<link rel="stylesheet" href="/static/game/game.css?v=20260810-pr4">
+<link rel="stylesheet" href="/static/game/game.css?v=20260810-pr5">
 </head>
 <body>
 
@@ -79,6 +79,14 @@
       <div class="stage-bg"></div>
       <div class="host-banner" id="host-banner"></div>
       <div class="story-transition" id="story-transition"></div>
+      <div class="chapter-guide" id="chapter-guide">
+        <div class="chapter-guide-head"><b id="chapter-guide-progress">故事导读 1 / 3</b><span>主持人讲述中</span></div>
+        <div class="chapter-guide-body">
+          <div class="chapter-guide-visual"><img id="chapter-guide-img" alt="故事插图"></div>
+          <div class="chapter-guide-copy"><b id="chapter-guide-source"></b><h3 id="chapter-guide-title"></h3><p id="chapter-guide-text"></p><blockquote id="chapter-guide-quote"></blockquote></div>
+        </div>
+        <div class="chapter-guide-foot"><div id="chapter-guide-dots"></div><p><b>主持人</b><span id="chapter-guide-caption"></span></p><button id="chapter-guide-skip">跳过导读</button></div>
+      </div>
       <div id="chars"></div>
       <div class="bubble" id="bubble"><div class="bubble-name" id="bubble-name"></div><div class="bubble-meta" id="bubble-meta"></div><div class="bubble-text" id="bubble-text"></div></div>
       <div class="think" id="think">…</div>
@@ -123,6 +131,6 @@
   </div>
 </section>
 
-<script src="/static/game/game.js?v=20260810-pr26"></script>
+<script src="/static/game/game.js?v=20260810-pr28"></script>
 </body>
 </html>

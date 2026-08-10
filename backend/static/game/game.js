@@ -347,7 +347,8 @@ async function runGame() {
     setTheater(st, meta);
     refreshSuggestions(st, 'source');
 
-    await hostSpeak(st, 'intro', meta.host_intro);
+    const guided = meta.guide_slides?.length ? await showChapterGuide(st, meta) : false;
+    if (!guided) await hostSpeak(st, 'intro', meta.host_intro);
     if (STORIES[S.storyIdx + 1]) prefetchHost(STORIES[S.storyIdx + 1], 'intro');
     await circle(st, meta);                      // 第一圈
     if (S.aborted) break;
@@ -364,6 +365,44 @@ async function runGame() {
     if (nextStory && !S.aborted) await showStoryTransition(nextStory);
   }
   if (!S.aborted) showReport();
+}
+
+async function showChapterGuide(st, meta) {
+  const slides = meta.guide_slides || [];
+  if (!slides.length) return false;
+  const guide = $('#chapter-guide');
+  $('#chapter-guide-img').src = meta.theater;
+  $('#chapter-guide-source').textContent = st.source;
+  $('#chapter-guide-dots').innerHTML = slides.map(() => '<i></i>').join('');
+  let skipped = false;
+  let resolveSkip;
+  const skipPromise = new Promise((resolve) => { resolveSkip = resolve; });
+  $('#chapter-guide-skip').onclick = () => {
+    skipped = true;
+    if (S.audio) { try { S.audio.pause(); } catch {} }
+    if (S.stopAudio) S.stopAudio();
+    resolveSkip();
+  };
+  $('#chars').classList.add('guide-mode'); guide.classList.add('on');
+  const audioPromises = slides.map((slide) => canPlayAudio() ? fetchHostTTS(slide.narration) : null);
+  for (let index = 0; index < slides.length && !skipped; index++) {
+    const slide = slides[index];
+    $('#chapter-guide-progress').textContent = `故事导读 ${index + 1} / ${slides.length}`;
+    $('#chapter-guide-title').textContent = slide.title;
+    $('#chapter-guide-text').textContent = slide.text;
+    $('#chapter-guide-quote').textContent = slide.quote;
+    $('#chapter-guide-caption').textContent = slide.narration;
+    $('#chapter-guide-img').style.transform = `translateY(-${index * 33.333}%)`;
+    [...$('#chapter-guide-dots').children].forEach((dot, dotIndex) => dot.classList.toggle('on', dotIndex === index));
+    const prepared = audioPromises[index] ? await audioPromises[index] : null;
+    if (skipped) break;
+    if (prepared) await playAudio(prepared);
+    else await Promise.race([sleep(readTime(slide.narration) * .8), skipPromise]);
+    if (!skipped) await Promise.race([sleep(450), skipPromise]);
+  }
+  guide.classList.remove('on'); $('#chars').classList.remove('guide-mode');
+  await sleep(450);
+  return true;
 }
 
 async function showStoryTransition(nextStory) {
