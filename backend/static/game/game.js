@@ -164,7 +164,7 @@ async function boot() {
 function renderStoryList() {
   $('#story-count').textContent = `${STORIES.length}篇《论语》· 一场语音圆桌`;
   $('#story-list-label').textContent = `今晚${STORIES.length}篇`;
-  $('#story-list').innerHTML = STORIES.map((story, index) => `<span class="ss-item">${index + 1}. ${story.title}<i>${story.source.replace('《论语·', '').replace('》', '')}</i></span>`).join('');
+  $('#story-list').innerHTML = STORIES.map((story, index) => `<span class="ss-item"><em>${index + 1}.</em><b>${story.source}</b></span>`).join('');
 }
 
 function show(id) {
@@ -315,6 +315,7 @@ function cuePhilosopher(id) {
 
 // ═══ 游戏主流程 ═══
 async function startGame() {
+  S.seatPreviewStop?.();
   S.panel = [...$('#pick-grid')._picked];
   S.storyIdx = 0; S.transcript = []; S.userLines = [];
   S.storyTranscript = [];
@@ -343,11 +344,13 @@ async function runGame() {
     if (STORIES[S.storyIdx + 1]) prefetchHost(STORIES[S.storyIdx + 1], 'intro');
     await circle(st, meta);                      // 第一圈
     if (S.aborted) break;
-    const preEscalationResponders = await userWindow(st, meta); // cue 玩家
+    await userWindow(st, meta);                                // cue 玩家
     if (S.aborted) break;
     S.escalated = true;                          // 议题升级
     slateUpgrade(meta);
-    await circle(st, meta, preEscalationResponders); // 避免刚回复玩家的人立刻重复
+    await hostSpeak(st, 'escalation', meta.host_escalation_line);
+    S.order = [...S.panel].sort(() => Math.random() - 0.5);
+    await circle(st, meta);                      // 深入讨论：全员承接主持人换角度
     if (S.aborted) break;
     await hostSpeak(st, 'outro', meta.host_outro);
     const nextStory = STORIES[S.storyIdx + 1];

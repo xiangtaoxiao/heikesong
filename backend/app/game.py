@@ -489,7 +489,7 @@ def _opening_speech(story: dict) -> str:
     """Introduce each Analects passage without inventing a second, modern story."""
     story_number = int(str(story["id"]).removeprefix("s"))
     opener = INTRO_OPENERS[(story_number - 1) % len(INTRO_OPENERS)].format(source=story["source"])
-    parts = [opener, story["translation"]]
+    parts = (["欢迎来到问道未竟的论语。今晚，我们不急着找标准答案，先把每个问题想深一点。"] if story["id"] == "s1" else []) + [opener, story["translation"]]
     if story.get("opening_mode") == "supplemental" and story.get("scene"):
         parts.append(f"先看一个小小的同行画面。{story['scene']}")
     parts.append(f"那么，{story['focal']}")

@@ -69,11 +69,14 @@ button { font-family: var(--serif); cursor: pointer; }
 .pick-sprite.text-portrait { width: 100px; height: 156px; margin: 10px auto 14px; font-size: 23px; border-radius: 50px 50px 12px 12px; }
 .pick-card .pk-name { font-size: 17px; font-weight: 700; margin-top: 6px; }
 .pick-card .pk-tag { font-size: 11px; color: var(--ink-dim); margin-top: 2px; }
-.select-stories { display: flex; gap: 10px; justify-content: center; align-items: flex-start; margin: 10px 0 20px;
+.select-stories { display: flex; flex-direction: column; gap: 8px; justify-content: center; align-items: center; margin: 10px 0 20px;
   font-size: 12px; color: var(--ink-dim); }
-#story-list { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px 12px; max-width: 850px; }
+#story-list { display: grid; grid-template-columns: repeat(5, minmax(118px, 1fr)); gap: 8px 12px; width: min(820px, 82vw); }
+.ss-item { display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: baseline; column-gap: 6px; white-space: nowrap; }
+.ss-item em { font-style: normal; text-align: right; }.ss-item b { font-weight: 500; }
 .ss-label { color: var(--terra); letter-spacing: 2px; }
-.ss-item i { font-style: normal; font-size: 11px; color: #a9a390; margin-left: 4px; }
+@media (max-width: 860px) { #story-list { grid-template-columns: repeat(2, minmax(180px, 1fr)); width: min(520px, 82vw); } }
+@media (max-width: 680px) { .select-stories { gap: 6px; } #story-list { grid-template-columns: 1fr; width: min(320px, 86vw); } }
 
 /* ═══ 圆桌 ═══ */
 .topbar { display: flex; justify-content: space-between; align-items: center;
