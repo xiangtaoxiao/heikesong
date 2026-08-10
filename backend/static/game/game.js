@@ -213,7 +213,7 @@ function prefetchSeatQuote(id) {
   while (S.seatPrefetchActive < 3 && S.seatPrefetchQueue.length) {
     const next = S.seatPrefetchQueue.shift();
     S.seatPrefetchActive++;
-    fetchTTS(next, SEAT_QUOTES[next]).then((audio) => { if (audio) S.seatQuoteAudio[next] = audio; })
+    fetchSeatQuoteAudio(next).then((audio) => { if (audio) S.seatQuoteAudio[next] = audio; })
       .finally(() => { S.seatPrefetchActive--; prefetchSeatQuote(); });
   }
 }
@@ -223,7 +223,7 @@ async function previewSeatQuote(id, sprite) {
   const token = ++S.seatPreviewToken;
   S.seatPreviewStop?.();
   let prepared = S.seatQuoteAudio[id];
-  if (!prepared) prepared = await fetchTTS(id, SEAT_QUOTES[id]);
+  if (!prepared) prepared = await fetchSeatQuoteAudio(id);
   if (token !== S.seatPreviewToken) return;
   if (!prepared) return;
   const audio = prepared.audio;
@@ -242,6 +242,13 @@ async function previewSeatQuote(id, sprite) {
   audio.onended = audio.onerror = finish;
   audio.currentTime = 0;
   audio.play().catch(finish);
+}
+
+async function fetchSeatQuoteAudio(id) {
+  try {
+    const response = await fetch(`/static/assets/audio/seat-quotes/${id}.wav`);
+    return response.ok ? prepareAudio(await response.blob()) : null;
+  } catch { return null; }
 }
 
 function setFrame(el, f) {
