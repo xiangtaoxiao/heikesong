@@ -90,13 +90,6 @@ const STORIES = [
   { id: 's1', title: '一只羊',     source: '《论语·子路》13.18', focal: '这个儿子做对了吗？' },
   { id: 's2', title: '门口的仇人', source: '《论语·宪问》14.34', focal: '该怎么对待伤害过你的人？' },
   { id: 's3', title: '三年之丧',   source: '《论语·阳货》17.21', focal: '宰予错了吗？' },
-  { id: 's4', title: '己欲立而立人', source: '《论语·雍也》6.30', focal: '成全别人，是仁，还是负担？' },
-  { id: 's5', title: '颜回陋巷', source: '《论语·雍也》6.11', focal: '贫困中的安乐，应被赞美吗？' },
-  { id: 's6', title: '阳货之避', source: '《论语·阳货》17.1', focal: '周旋是妥协，还是保全？' },
-  { id: 's7', title: '陈蔡绝粮', source: '《论语·卫灵公》15.2', focal: '绝境中如何守住理想？' },
-  { id: 's8', title: '孔子见南子', source: '《论语·雍也》6.28', focal: '本心清白，够不够？' },
-  { id: 's9', title: '三人行必有我师', source: '《论语·述而》7.22', focal: '学习怎样不盲从？' },
-  { id: 's10', title: '乘桴浮于海', source: '《论语·公冶长》5.7', focal: '道路不通时如何选择？' },
 ];
 let STORY_META = {};
 
@@ -125,6 +118,17 @@ async function boot() {
     STORY_META = await r.json();
   } catch { STORY_META = null; }
   $('#health-note').textContent = STORY_META ? '● 语音房已就绪（Haiku × Qwen-TTS）' : '◌ 剧场配置缺失';
+  fetch('/api/game/health').then((r) => r.json()).then((h) => {
+    if (!h) return;
+    const left = h.left_usd;
+    if (h.ok === false) {
+      $('#health-note').textContent = `◌ 上游不可用：${h.reason || '未知'}——语音与对话将退化为预置内容`;
+      S.audioUnavailable = true;
+    } else if (typeof left === 'number') {
+      $('#health-note').textContent = `● 语音房已就绪（Haiku × Qwen-TTS）· 剩余额度 $${left}`
+        + (left < 5 ? '（偏低，注意随时可能用尽）' : '');
+    }
+  }).catch(() => {});
   renderStorySummary();
 
   $('#btn-to-select').onclick = () => { renderPick(); show('#screen-select'); };
@@ -175,6 +179,8 @@ async function boot() {
   setupMic();
   updateSpeakGate();                                 // 未开席前发言控件保持禁用
   window.addEventListener('resize', () => layoutChars(true));
+  // 开场问候与选人无关：页面一加载就开始生成并合成语音，入席时零等待
+  S.welcomeP = fetchWelcome().then((t) => { warmTTS('host', t); return t; });
 
   const sharedToken = new URLSearchParams(location.search).get('report');
   if (sharedToken) {
@@ -239,7 +245,7 @@ function renderStorySummary() {
   if (count) count.textContent = `${STORIES.length}篇《论语》· 一场语音圆桌`;
   const list = $('#story-list');
   if (!list) return;
-  list.innerHTML = `<span class="ss-label">今晚十篇</span>${STORIES.map((story, index) =>
+  list.innerHTML = `<span class="ss-label">今晚三篇</span>${STORIES.map((story, index) =>
     `<span class="ss-item"><em>${index + 1}.</em> ${story.title}<i>${story.source.replace(/[《》]/g, '')}</i></span>`
   ).join('')}`;
 }
@@ -314,7 +320,7 @@ function stopSeatPreview() {
 function previewSeatQuote(id) {
   if (S.audioMuted || !SEAT_QUOTES[id]) return;
   stopSeatPreview();
-  const audio = new Audio(`/static/assets/audio/seat-quotes/${id}.wav?v=20260810-voice-swap1`);
+  const audio = new Audio(`/static/assets/audio/seat-quotes/${id}.wav`);
   S.seatPreview = audio;
   const finish = () => { if (S.seatPreview === audio) S.seatPreview = null; };
   audio.onended = finish;
@@ -341,7 +347,7 @@ function availableCharHeight() {
   const deckR = $('#story-deck').getBoundingClientRect();
   const floor = stageR.height * 0.034;                 // 落座线离舞台底
   const deckBottom = deckR.bottom - stageR.top;        // 卷轴整体下沿
-  const overlapAllowed = deckR.height * 0.10;          // 允许压住下竹轴的一点点
+  const overlapAllowed = deckR.height * 0.19;          // 允许压住下竹轴一点点（Eric：轻微重合更自然）
   return Math.max(150, Math.min(SPRITE_MAX, stageR.height - floor - deckBottom + overlapAllowed));
 }
 
@@ -435,6 +441,9 @@ async function startGame() {
   show('#screen-table');
   mountChars();
   startBgm();
+  // 抢跑：开场白与第一篇的主持人台词，在舞台刚亮起时就开始生成/合成
+  const first = STORY_META.stories.find((x) => x.id === STORIES[0].id);
+  if (first && canPlayAudio()) warmHostQueue(deckBeats(STORIES[0], first).map((b) => b.narration));
   runGame().catch((e) => console.error(e));
 }
 
@@ -443,13 +452,20 @@ async function fetchWelcome() {
     const r = await fetch('/api/game/welcome', { method: 'POST' });
     if (!r.ok) throw new Error('bad');
     return (await r.json()).speech;
-  } catch { return '各位贤者，晚上好。今晚咱们聊几桩《论语》里吵了两千年的旧事，诸位随意开口。'; }
+  } catch { return '各位请坐。今晚只聊三样东西：一只羊、一道门、三年时间。东西不大，问题一个比一个难。'; }
 }
 
 async function runGame() {
-  const welcome = await fetchWelcome();            // 全局开场：先问好，再进第一篇
-  $('#deck-title').textContent = '稷下 · 论语圆桌';
-  $('#deck-narrative').textContent = '今晚同席：' + S.panel.map((p) => CAST[p].name).join('、') + '，以及旁听的你。';
+  const welcome = await (S.welcomeP || fetchWelcome());   // 入席时已起跑，这里通常瞬时返回
+  S.deckBeats = [{
+    title: '稷下 · 论语圆桌',
+    narration: '今晚同席：' + S.panel.map((p) => CAST[p].name).join('、') + '，以及旁听的你。今晚共 ' + STORIES.length + ' 篇公案，随时可以插话。',
+    img: null,
+  }];
+  S.deckPage = 0;
+  renderDeckDots(1);
+  renderDeckPage();
+  $('#deck-source').textContent = '';
   await hostSay(welcome);
 
   for (S.storyIdx = 0; S.storyIdx < STORIES.length && !S.aborted; S.storyIdx++) {
@@ -467,12 +483,18 @@ async function runGame() {
       meta.host_user_cue, meta.host_escalation_line, meta.host_outro,
     ]);
     S.skipStory = false;
+    // 导读还在播的时候，第一位的台词与语音已经在生成——开席即可开口
+    S.order = [...S.panel].sort(() => Math.random() - 0.5);
+    S.grabbed = S.order[0];                          // 让抢麦认这一位，预取才不会落空
+    S.prefetch[pfKey(S.order[0])] = fetchTurn(S.order[0], st, null,
+      [{ who: 'host', name: '主持人', text: beats[0].narration }], 'open_view', '当前情境');
+    refreshSuggestions(st, 'source');
     await runStoryBriefing(st, meta);                 // 导读：人物静止
     if (S.aborted) break;
     if (S.skipStory) { await afterStory(st); continue; }
     Object.keys(S.chars).forEach(startIdle);          // 开席：进入聆听
-    refreshSuggestions(st, 'source');
-    S.prefetch[pfKey(S.order[0])] = fetchTurn(S.order[0], st, null);
+    const nextMeta = STORIES[S.storyIdx + 1] && STORY_META.stories.find((x) => x.id === STORIES[S.storyIdx + 1].id);
+    if (nextMeta && canPlayAudio()) warmHostQueue(deckBeats(STORIES[S.storyIdx + 1], nextMeta).map((b) => b.narration));
     await circle(st, meta);
     if (S.aborted) break;
     if (S.skipStory) { await afterStory(st); continue; }
@@ -484,6 +506,7 @@ async function runGame() {
     await hostSay(meta.host_escalation_line);
     refreshSuggestions(st, 'escalated');
     S.order = [...S.panel].sort(() => Math.random() - 0.5);
+    S.grabbed = S.order[0];
     S.prefetch[pfKey(S.order[0])] = fetchTurn(S.order[0], st, null);
     await circle(st, meta);
     if (S.aborted) break;
@@ -506,21 +529,30 @@ async function afterStory(st) {
   if (next && !S.aborted) await showStoryTransition(next);
 }
 
+// 每篇的三格漫画已裁成独立图：theater/<id>-1.png … -3.png
+function panelSrc(st, index) { return `/static/assets/theater/${st.id}-${index + 1}.png`; }
+
 function deckBeats(st, meta) {
-  if (meta.guide_slides?.length) {
-    const focuses = ['center 12%', 'center 50%', 'center 88%'];
-    return meta.guide_slides.map((slide, index) => ({
-      title: slide.title,
-      caption: [slide.text, slide.quote].filter(Boolean).join(' '),
-      narration: slide.narration || slide.text,
-      image_focus: focuses[index] || 'center',
-    }));
-  }
-  return meta.briefing?.length ? meta.briefing : [
-    { title: st.title, narration: meta.scene, image_focus: 'center 10%' },
-    { title: '原文线索', narration: meta.original_note, image_focus: 'center 52%' },
-    { title: '开席之问', narration: meta.host_intro, image_focus: 'center 88%' },
-  ];
+  const slides = meta.guide_slides?.length
+    ? meta.guide_slides.map((slide, i) => ({
+        title: slide.title,
+        caption: [slide.text, slide.quote].filter(Boolean).join(' '),
+        narration: slide.narration || slide.text,
+        img: panelSrc(st, i),
+      }))
+    : (meta.briefing?.length ? meta.briefing : [
+        { title: st.title, narration: meta.scene },
+        { title: '原文线索', narration: meta.original_note },
+        { title: '开席之问', narration: meta.host_intro },
+      ]).map((b, i) => ({ ...b, img: panelSrc(st, i) }));
+  // 第四页：无配图，只摆出要辩的议题——主持人讲到这里就开席
+  return [...slides, {
+    title: '本篇议题',
+    caption: st.focal,
+    narration: meta.host_intro,
+    img: null,
+    topic: true,
+  }];
 }
 
 function setTheater(st, meta) {
@@ -528,8 +560,8 @@ function setTheater(st, meta) {
   $('#orig-source').textContent = st.source;
   $('#orig-text').textContent = meta.original;
   $('#orig-note').textContent = meta.original_note;
-  $('#deck-img').src = meta.theater;
-  $('#deck-source').textContent = st.source;
+  [0, 1, 2].forEach((i) => { new Image().src = panelSrc(st, i); });   // 预载分格，翻页不闪
+  S.deckSource = st.source;
 }
 
 async function showStoryTransition(nextStory) {
@@ -552,16 +584,31 @@ async function runStoryBriefing(st, meta) {
   renderDeckDots(beats.length);
   for (let i = 0; i < beats.length && !S.aborted && !S.skipStory; i++) {
     await waitForFlow();
-    showDeckSlide(beats, i);
+    showDeckSlide(beats, i);                      // 主持人讲到哪一页，翻页条就自动走到哪一页
     await hostSay(beats[i].narration, { inDeck: true });
     if (S.skipBriefing) break;
+    if (i < beats.length - 1) await sleep(320);   // 翻页之间留一口气
   }
+  showDeckSlide(beats, beats.length - 1);         // 收在议题页
   S.briefing = false;
   updateSpeakGate();                              // 开席，发言入口解禁
   enterDebateDeck(st, meta);
 }
 
 // 统一的幻灯片状态：S.deckBeats + S.deckPage，导读与自由翻页共用一套
+// 换配图：没有图就整块收起，避免出现空的灰色占位
+function setDeckImage(src) {
+  const box = $('#deck-visual');
+  const img = $('#deck-img');
+  if (!src) { box.classList.add('empty'); img.removeAttribute('src'); return; }
+  box.classList.remove('empty');
+  if (img.getAttribute('src') !== src) {
+    img.classList.add('swapping');
+    img.src = src;
+    img.onload = () => img.classList.remove('swapping');
+  }
+}
+
 function renderDeckPage() {
   const beats = S.deckBeats;
   if (!beats || !beats.length) return;
@@ -570,9 +617,11 @@ function renderDeckPage() {
   const beat = beats[i];
   $('#deck-title').textContent = beat.title;
   $('#deck-narrative').textContent = beat.caption || beat.narration;
-  $('#deck-img').style.objectPosition = beat.image_focus || 'center';
+  $('#deck-source').textContent = beat.topic ? '' : (S.deckSource || '');
+  $('#story-deck').classList.toggle('topic-page', !!beat.topic);
+  setDeckImage(beat.img);
   document.querySelectorAll('#deck-dots i').forEach((dot, idx) => dot.classList.toggle('on', idx === i));
-  $('#deck-phase').textContent = S.briefing ? `故事导读 ${i + 1}/${beats.length}` : `第 ${i + 1}/${beats.length} 页`;
+  $('#deck-phase').textContent = `${i + 1} / ${beats.length}`;
   $('#btn-deck-prev').disabled = i === 0;
   $('#btn-deck-next').disabled = i === beats.length - 1;
 }
@@ -598,11 +647,12 @@ function enterDebateDeck(st, meta) {
   $('#story-deck').classList.remove('briefing');
   $('#screen-table').classList.add('debating');
   // 故事各页 + 末页「当前议题」，辩论期可随时左右翻回去看
-  const pages = [...deckBeats(st, meta), {
-    title: S.escalated ? '议题升级' : st.focal,
-    narration: S.escalated ? meta.escalation.replace(/^议题升级——/, '') : meta.scene,
-    image_focus: 'center 48%',
-  }];
+  const pages = deckBeats(st, meta);
+  if (S.escalated) {                               // 升级后改写议题页
+    const topic = pages[pages.length - 1];
+    topic.title = '议题升级';
+    topic.caption = meta.escalation.replace(/^议题升级——/, '');
+  }
   S.deckBeats = pages;
   S.deckPage = pages.length - 1;
   renderDeckDots(pages.length);
@@ -647,7 +697,7 @@ async function circle(st, meta) {
     S.grabbed = null;
     pool.splice(pool.indexOf(id), 1);
     const previous = lastActualPhilosopher();
-    const relation = pos === 0 ? (S.escalated ? 'reconsider' : 'open_view') : (pos % 2 ? 'build_on' : 'challenge');
+    const relation = relationForPosition(pos);
     await speak(id, st, {
       relation,
       replyTo: previous ? CAST[previous].name : '当前情境',
@@ -655,12 +705,21 @@ async function circle(st, meta) {
       pickNext: pool.length ? (text) => {
         const nid = grabMic(pool, text);
         S.grabbed = nid;
-        return { id: nid, relation: (pos + 1) % 2 ? 'build_on' : 'challenge', replyTo: CAST[id].name };
+        return { id: nid, relation: relationForPosition(pos + 1), replyTo: CAST[id].name };
       } : null,
     });
     pos++;
   }
   if (!S.skipStory) await drainUser(st, 0);
+}
+
+// 每篇只安排两个轻喜剧节拍：第一圈第三位善意拆台，第二圈第二位回收前文梗。
+// 其余轮次仍以承接和挑战为主，避免整桌人都在抢着讲笑话。
+function relationForPosition(pos) {
+  if (pos === 0) return S.escalated ? 'reconsider' : 'open_view';
+  if (!S.escalated && pos === 2) return 'gentle_tease';
+  if (S.escalated && pos === 1) return 'callback';
+  return pos % 2 ? 'build_on' : 'challenge';
 }
 
 async function drainUser(st, circlePos) {
@@ -810,15 +869,39 @@ async function fetchTurn(id, st, userText, transcriptOverride, relation, replyTo
   }
 }
 
+function noteAudioFailure(detail = '') {
+  S.ttsFailures = (S.ttsFailures || 0) + 1;
+  if (S.ttsFailures < 2 || S.audioUnavailable) return;
+  S.audioUnavailable = true;                       // 后续一律走文字模式，避免整局静音
+  const quota = /额度|quota|402/.test(detail);
+  showSystemNotice(quota
+    ? '语音额度已用尽——已自动切换为文字模式，对话照常进行'
+    : '语音服务暂时不可用——已自动切换为文字模式');
+}
+
+function showSystemNotice(text) {
+  let el = document.querySelector('#sys-notice');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'sys-notice';
+    document.body.appendChild(el);
+  }
+  el.textContent = text;
+  el.classList.add('on');
+  clearTimeout(S.noticeTimer);
+  S.noticeTimer = setTimeout(() => el.classList.remove('on'), 9000);
+}
+
 async function fetchTTS(id, text) {
   try {
     const r = await fetch('/api/game/tts', {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ persona: id, text }),
     });
-    if (!r.ok) return null;
+    if (!r.ok) { noteAudioFailure(String(r.status) + (await r.text().catch(() => ''))); return null; }
+    S.ttsFailures = 0;
     return await r.blob();
-  } catch { return null; }
+  } catch (e) { noteAudioFailure(''); return null; }
 }
 
 function playAudio(blob) {
@@ -844,7 +927,7 @@ function playAudio(blob) {
   });
 }
 
-function canPlayAudio() { return !S.audioMuted; }
+function canPlayAudio() { return !S.audioMuted && !S.audioUnavailable; }
 function stopCurrentAudio() {
   if (S.audio) { try { S.audio.pause(); } catch {} }
   if (S.finishAudio) S.finishAudio();
@@ -926,8 +1009,10 @@ async function fetchHostTTS(text) {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ persona: 'host', text }),
     });
-    return r.ok ? await r.blob() : null;
-  } catch { return null; }
+    if (!r.ok) { noteAudioFailure(String(r.status) + (await r.text().catch(() => ''))); return null; }
+    S.ttsFailures = 0;
+    return await r.blob();
+  } catch (e) { noteAudioFailure(''); return null; }
 }
 
 // ═══ cue 玩家（挂牌落在玩家头顶）═══

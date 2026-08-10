@@ -16,14 +16,6 @@
   --shadow: 0 2px 14px rgba(60, 60, 40, .12);
 }
 
-@font-face {
-  font-family: "MaShanZheng";
-  src: url('/static/assets/fonts/MaShanZheng-Regular.ttf') format('truetype');
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
-
 html, body { height: 100%; }
 body { background: var(--cream); color: var(--ink); font-family: var(--serif); overflow: hidden; }
 b { color: var(--sage-deep); }
@@ -64,7 +56,7 @@ button { font-family: var(--serif); cursor: pointer; }
 .btn-ghost { font-size: 14px; padding: 8px 20px; background: none; border: 1px solid var(--line); border-radius: 8px; color: var(--ink-dim); }
 .btn-ghost:hover { border-color: var(--sage); color: var(--sage-deep); }
 
-/* ═══ 开始页 ═══ */
+/* ═══ 开始页（同学的新版 hero 设计，从 129f16d 摘出）═══ */
 #screen-start { position: relative; overflow: hidden; background: #17130f;
   --start-font: "方正楷体_GBK", "FZKai-Z03", "Kaiti SC", "KaiTi", "STKaiti", serif;
   font-family: var(--start-font); }
@@ -105,20 +97,12 @@ button { font-family: var(--serif); cursor: pointer; }
   transition: transform .16s, filter .16s; }
 .start-enter:hover { transform: translate(-50%, -4px); filter: drop-shadow(0 12px 12px rgba(22,14,7,.58)) brightness(1.08); }
 .start-enter:active { transform: translate(-50%, 1px); filter: drop-shadow(0 5px 5px rgba(22,14,7,.48)) brightness(.97); }
+/* 剩余额度提示：新版设计里视觉隐藏（仅保留给屏幕阅读器），跟旧版"页面底部显示 $x"不同，请留意 */
 .start-note { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
-
-@media (max-width: 760px) {
-  .start-heading { left: 4%; right: 4%; top: 15%; }
-  .start-heading h1 { font-size: clamp(34px, 8.5vw, 50px); letter-spacing: 3px; text-indent: 3px; }
-  .start-heading p { width: 86vw; font-size: clamp(12px, 3vw, 17px); letter-spacing: 1px; gap: 8px; }
-  .start-heading p::before, .start-heading p::after { width: 24px; }
-  .start-cast { left: -16%; right: -16%; bottom: 1%; height: 42%; }
-  .start-enter { bottom: 2.5%; width: 230px; height: 66px; font-size: 27px; }
-}
 
 /* ═══ 选人 ═══ */
 #screen-select { align-items: center; justify-content: center;
-  background: url('/static/assets/ui/select-bg-ink.png') center / cover no-repeat, var(--cream); }
+  background: url('/static/assets/ui/paper-tile.png') center / 512px, var(--cream); }
 .select-wrap { text-align: center; width: min(1080px, 94vw); }
 .select-wrap h2 { font-size: 28px; letter-spacing: 10px; margin-bottom: 6px; }
 .select-hint { font-size: 13px; letter-spacing: 1px; color: var(--ink-dim); }
@@ -158,64 +142,16 @@ button { font-family: var(--serif); cursor: pointer; }
 .game-paused .stage-bg::after { content: ''; position: absolute; inset: 0; background: rgba(40,35,25,.18); }
 
 /* ── 竹卷轴讲席 ── */
-.story-deck { position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
-  height: 57%; width: auto; max-width: 92%; aspect-ratio: 1516 / 878;
+.story-deck { position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+  height: 68%; width: auto; max-width: 94%; aspect-ratio: 1516 / 878;
   z-index: 8; pointer-events: none; }
 .deck-frame { position: absolute; inset: 0; width: 100%; height: 100%;
   filter: drop-shadow(0 14px 22px rgba(45,35,15,.35)); }
-.deck-paper { position: absolute; left: 7.4%; right: 7.6%; top: 16.4%; bottom: 16%;
-  display: flex; flex-direction: column; pointer-events: auto; }
-.deck-head { display: flex; justify-content: space-between; align-items: center; padding: 2px 6px 6px; }
-.deck-phase { font-size: 12px; letter-spacing: 3px; color: #fff; background: var(--terra);
-  border-radius: 5px; padding: 2px 10px; box-shadow: 0 1px 3px rgba(120,50,20,.3); }
-.deck-status { font-size: 11.5px; letter-spacing: 2px; color: #8a7a58; margin-left: auto; }
-.deck-content { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; min-height: 0; padding: 0 4px; }
-.deck-visual { position: relative; border: 1px solid rgba(120,100,60,.45); border-radius: 6px; overflow: hidden;
-  box-shadow: inset 0 0 12px rgba(90,70,30,.18); background: #efe7d2; cursor: zoom-in; transition: box-shadow .2s; }
-.deck-visual:hover { box-shadow: 0 0 0 2px rgba(163,85,47,.55), inset 0 0 12px rgba(90,70,30,.18); }
-.deck-visual .zoom-hint { position: absolute; right: 6px; bottom: 6px; font-size: 10.5px; letter-spacing: 1px;
-  color: #f4ead6; background: rgba(60,45,25,.72); border-radius: 10px; padding: 2px 9px;
-  opacity: 0; transition: opacity .2s; pointer-events: none; }
-.deck-visual:hover .zoom-hint { opacity: 1; }
-.deck-visual img { width: 100%; height: 100%; object-fit: cover; display: block; transition: object-position .8s ease; }
-.deck-copy { min-height: 0; overflow: hidden; padding-top: 2px; display: flex; flex-direction: column; }
-.deck-source { font-size: 11.5px; letter-spacing: 2px; color: #a3552f; }
-.deck-copy h2 { font-size: clamp(19px, 2vw, 26px); letter-spacing: 3px; margin: 5px 0 7px; color: #3a3020;
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.deck-narrative { font-size: clamp(13px, 1.2vw, 15.5px); line-height: 1.95; color: #574a34;
-  display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
-.deck-foot { display: flex; align-items: center; gap: 12px; padding: 6px 6px 0; min-height: 26px; }
-.deck-dots { display: flex; gap: 5px; }
-.deck-dots i { width: 8px; height: 8px; border-radius: 50%; background: #cbbc98; transition: background .3s; }
-.deck-dots i.on { background: var(--terra); }
-.deck-narration { flex: 1; display: flex; align-items: center; gap: 8px; min-width: 0;
-  font-size: 12.5px; color: #6b5c40; opacity: 0; transition: opacity .25s; }
-.deck-narration.speaking, .story-deck.briefing .deck-narration { opacity: 1; }
-.deck-narration .host-medal { width: 22px; height: 22px; object-fit: contain; flex-shrink: 0; }
-.deck-narration span { flex-shrink: 0; letter-spacing: 1px; color: #a3552f; }
-.deck-narration b { font-weight: 400; color: #4a3f2c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.deck-narration .host-medal { width: 26px; height: 26px; object-fit: contain; }
-.deck-narration span { flex-shrink: 0; letter-spacing: 1px; color: #8a5a33; }
-.deck-narration b { font-weight: 400; color: #4a3f2c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.deck-narration.speaking b { color: #2f2818; }
-.deck-head-ctas { display: flex; gap: 6px; flex-shrink: 0; margin-left: 10px; }
-.deck-cta { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; letter-spacing: 1px;
-  color: #5c4c30; background: rgba(255,251,240,.65); border: 1px solid rgba(140,110,60,.5);
-  border-radius: 7px; padding: 4px 10px; transition: all .15s; }
-.deck-cta:hover { background: #fff; border-color: #8a6a3a; }
-.deck-cta img { width: 16px; height: 16px; object-fit: contain; }
 #btn-skip-brief { display: none; }
 .story-deck.briefing #btn-skip-brief { display: inline-flex; }
 .story-deck.briefing #btn-deck-review { display: none; }
 
 /* 回看模式 */
-.review-nav { display: none; justify-content: center; gap: 10px; padding-top: 6px; }
-.story-deck.reviewing .review-nav { display: flex; }
-.story-deck.reviewing .deck-ctas { display: none; }
-.review-nav button { font-size: 12.5px; letter-spacing: 1px; color: #5c4c30;
-  background: rgba(255,251,240,.75); border: 1px solid rgba(140,110,60,.5); border-radius: 7px; padding: 4px 12px; }
-.review-nav button:hover { background: #fff; }
-.review-nav .review-close { background: var(--sage-deep); color: #f2ead8; border-color: var(--sage-deep); }
 
 /* ── 哲学家席 ── */
 #chars { position: absolute; inset: 0; z-index: 12; }
@@ -406,23 +342,8 @@ button { font-family: var(--serif); cursor: pointer; }
 .stage-bg { background: url('/static/assets/ui/gpt2/stage-garden.png') center / cover no-repeat; }
 
 /* 卷轴贴近顶栏并适度增高：横向 PPT 保持主角，同时给正文更多呼吸。 */
-.story-deck { top: -4px; height: 54%; max-width: 93%; aspect-ratio: 1916 / 771; }
+.story-deck { top: -2px; height: 67%; max-width: 95%; aspect-ratio: 1916 / 771; }
 .deck-frame { filter: drop-shadow(0 10px 16px rgba(45,35,15,.3)); }
-.deck-paper { left: 5.1%; right: 5.1%; top: 13.8%; bottom: 12.8%; }
-.deck-head { padding: 1px 8px 5px; min-height: 28px; }
-.deck-phase { font-size: 11px; letter-spacing: 2px; padding: 3px 11px; }
-.deck-status { font-size: 10.5px; }
-.deck-content { grid-template-columns: 52% 1fr; gap: 24px; padding: 1px 8px 2px; }
-.deck-visual { border-radius: 3px; }
-.deck-copy h2 { font-size: clamp(20px,2.15vw,31px); margin: 5px 0 9px; }
-.deck-narrative { font-size: clamp(12px,1.15vw,15px); line-height: 1.85; }
-.deck-foot { min-height: 28px; padding: 4px 8px 0; }
-.deck-narration { font-size: 11.5px; }
-.deck-head-ctas { gap: 5px; }
-.deck-cta { font-size: 11px; padding: 3px 9px; }
-.deck-cta img, .host-medal { display: none; }
-.review-nav { padding-top: 3px; gap: 7px; }
-.review-nav button { font-size: 11px; padding: 3px 9px; }
 
 /* 人物保持次于 PPT 的层级；待机只显示静态帧。 */
 #chars { pointer-events:none; }
@@ -501,7 +422,7 @@ button { font-family: var(--serif); cursor: pointer; }
 }
 @media (max-width: 820px) {
   .tb-story { display:none; }
-  .story-deck { top:-2px; height:47%; max-width:97%; }
+  .story-deck { top:-2px; height:60%; max-width:98%; }
   .meeting-toolbar { grid-template-columns:1fr auto 1fr; }
   .dock-control { min-width:58px; padding:2px 7px; font-size:10px; }
   .speak-primary { width:150px; }
@@ -510,37 +431,175 @@ button { font-family: var(--serif); cursor: pointer; }
   .speech-tray { padding-left:32px; padding-right:32px; }
 }
 @media (max-height: 760px) {
-  .story-deck { top:-4px; height:53%; }
+  .story-deck { top:-3px; height:65%; }
   .deck-narrative { -webkit-line-clamp:3; }
   .speech-tray { min-height:126px; padding-top:25px; padding-bottom:28px; }
 }
 
-
 /* ═══ v3 增补：PPT 常驻翻页 / 主持人台词放大 / 跳过控件 ═══ */
 
-/* 幻灯片翻页条：箭头 + 页码点，放在纸面底部，永不遮挡正文 */
-.deck-pager { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
-.deck-page { width: 26px; height: 26px; border: 1px solid rgba(140,110,60,.5); border-radius: 7px;
-  background: rgba(255,251,240,.85); color: #6b5530; font-size: 17px; line-height: 1; padding: 0;
-  box-shadow: 0 1px 3px rgba(50,38,18,.16); transition: all .15s; }
-.deck-page:hover:not(:disabled) { background: #fff; border-color: #8a6a3a; }
-.deck-page:disabled { opacity: .3; cursor: default; }
-
 /* 主持人台词：从一行小字改成显眼的讲述条 */
-.deck-foot { align-items: flex-start; }
-.deck-narration { flex: 1; display: flex; align-items: flex-start; gap: 9px; min-width: 0;
-  background: linear-gradient(180deg, rgba(255,250,238,.96), rgba(246,238,220,.96));
-  border: 1px solid rgba(150,115,60,.5); border-left: 4px solid var(--terra);
-  border-radius: 10px; padding: 7px 13px; box-shadow: 0 2px 7px rgba(60,45,20,.16);
-  opacity: 0; transition: opacity .25s; }
-.deck-narration.speaking, .story-deck.briefing .deck-narration { opacity: 1; }
-.deck-narration > span { flex-shrink: 0; font-size: 12px; letter-spacing: 1px; color: #fff;
-  background: var(--terra); border-radius: 5px; padding: 2px 8px; margin-top: 1px; }
-.deck-narration b { font-weight: 400; font-size: 14.5px; line-height: 1.65; color: #33291a;
-  white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.deck-narration.speaking b { animation: hostpulse 1.6s ease-in-out infinite; }
 @keyframes hostpulse { 0%,100% { color: #33291a; } 50% { color: #7a4527; } }
 
 /* 跳过控件在辩论期才出现 */
 #btn-skip-turn, #btn-skip-story { display: none; }
 .debating #btn-skip-turn, .debating #btn-skip-story { display: inline-flex; }
+
+/* 第四页（本篇议题）：无图，标题与正文各占半幅 */
+
+/* ═══════════ 讲席 · 版本 B（竖排标题式）═══════════ */
+.deck-paper { position: absolute; left: 5.4%; right: 5.4%; top: 15.6%; bottom: 14.2%;
+  display: flex; flex-direction: column; gap: 5px; pointer-events: auto; }
+
+/* 右上角：状态 + 原文 / 跳过导读 */
+.deck-head { position: absolute; top: 2px; right: 4px; display: flex; align-items: center;
+  gap: 9px; z-index: 3; }
+.deck-status { font-size: 11px; letter-spacing: 2px; color: #9a8a66; }
+.deck-head-ctas { display: flex; gap: 6px; }
+.deck-cta { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; letter-spacing: 1px;
+  color: #5c4c30; background: rgba(255,251,240,.72); border: 1px solid rgba(140,110,60,.5);
+  border-radius: 5px; padding: 3px 10px; transition: all .15s; }
+.deck-cta:hover { background: #fff; border-color: #8a6a3a; }
+#btn-skip-brief { display: none; }
+.story-deck.briefing #btn-skip-brief { display: inline-flex; }
+
+/* 主体三栏：竖排标题 / 配图 / 正文 */
+.deck-body { flex: 1; min-height: 0; display: grid;
+  grid-template-columns: auto minmax(0, 1.3fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);              /* 行高锁死，内容再大也不撑破 */
+  gap: clamp(12px, 1.8vw, 26px); align-items: stretch; padding: 22px 6px 0; }
+
+.deck-side { display: flex; flex-direction: column; align-items: center; gap: 6px;
+  border-right: 1px solid rgba(120,95,55,.32); padding-right: clamp(9px, 1.2vw, 16px);
+  min-width: 40px; overflow: hidden; }
+/* 竖排标题：宁可小一点，也不能折成两列 */
+.deck-title-v { writing-mode: vertical-rl; text-orientation: upright; white-space: nowrap;
+  font-size: clamp(17px, 2.5vh, 31px); letter-spacing: clamp(2px, .32vh, 5px);
+  font-weight: 700; color: #2f2a1e; line-height: 1.02; flex: 0 1 auto; min-height: 0; overflow: hidden; }
+.deck-seal { width: clamp(20px, 2.7vh, 30px); height: auto; opacity: .9; flex-shrink: 0; }
+.deck-source-v { writing-mode: vertical-rl; white-space: nowrap; font-size: clamp(8.5px, 1.05vh, 11px);
+  letter-spacing: 1.5px; color: #8a6a3a; flex: 0 1 auto; min-height: 0; overflow: hidden; }
+
+.deck-visual { position: relative; min-width: 0; min-height: 0; overflow: hidden;
+  border: 1px solid rgba(120,100,60,.5); outline: 1px solid rgba(120,100,60,.25); outline-offset: 3px;
+  border-radius: 2px; cursor: zoom-in; align-self: stretch; }
+/* 图片绝对定位：容器高度只由栅格行决定，图片再大也压不到下面的翻页条 */
+.deck-visual img { position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; display: block; transition: opacity .25s ease; }
+.deck-visual img.swapping { opacity: 0; }
+.deck-visual .zoom-hint { position: absolute; right: 5px; bottom: 5px; font-size: 10px; letter-spacing: 1px;
+  color: #f4ead6; background: rgba(60,45,25,.7); border-radius: 9px; padding: 1px 8px;
+  opacity: 0; transition: opacity .2s; pointer-events: none; }
+.deck-visual:hover .zoom-hint { opacity: 1; }
+.deck-visual.empty { display: none; }
+
+.deck-copy { display: flex; flex-direction: column; justify-content: center; min-width: 0; min-height: 0; }
+.deck-narrative { font-size: clamp(12px, 1.6vh, 16.5px); line-height: 2.05; color: #4a4032;
+  display: -webkit-box; -webkit-line-clamp: 8; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 翻页条：居中 */
+.deck-pager { display: flex; align-items: center; justify-content: center; gap: 10px;
+  padding: 3px 0 2px; flex-shrink: 0; }
+.deck-page { width: 24px; height: 24px; border: 1px solid rgba(140,110,60,.5); border-radius: 6px;
+  background: rgba(255,251,240,.85); color: #6b5530; font-size: 15px; line-height: 1; padding: 0;
+  transition: all .15s; }
+.deck-page:hover:not(:disabled) { background: #fff; border-color: #8a6a3a; }
+.deck-page:disabled { opacity: .3; cursor: default; }
+.deck-pageno { font-size: 12.5px; letter-spacing: 2px; color: #a3552f; min-width: 40px; text-align: center; }
+.deck-dots { display: flex; gap: 5px; }
+.deck-dots i { width: 7px; height: 7px; border-radius: 50%; background: #cbbc98; transition: background .3s; }
+.deck-dots i.on { background: var(--terra); }
+
+/* 主持人条：通栏双线框 */
+.deck-narration { flex-shrink: 0; display: flex; align-items: flex-start; gap: 10px;
+  margin: 0 2px 1px; padding: 7px 14px; border-radius: 3px;
+  border: 1px solid rgba(150,115,60,.5); outline: 1px solid rgba(150,115,60,.22); outline-offset: 2px;
+  background: linear-gradient(180deg, rgba(255,251,240,.94), rgba(248,241,224,.94));
+  opacity: 0; transition: opacity .25s; }
+.deck-narration.speaking, .story-deck.briefing .deck-narration { opacity: 1; }
+.deck-narration > span { flex-shrink: 0; background: #a5372a; color: #fff; border-radius: 3px;
+  padding: 3px 11px; font-size: 12px; letter-spacing: 2px; margin-top: 1px; }
+.deck-narration b { font-weight: 400; color: #382f20; font-size: clamp(12.5px, 1.55vh, 16px);
+  line-height: 1.72; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* 第四页「本篇议题」：无配图，标题与议题各占半幅 */
+/* 第四页「本篇议题」：无配图，把要辩的问题放大居中，像一张开席的题板 */
+.story-deck.topic-page .deck-body { grid-template-columns: auto minmax(0, 1fr); }
+.story-deck.topic-page .deck-copy { align-items: center; justify-content: center; text-align: center;
+  padding: 0 clamp(20px, 5vw, 90px); }
+.story-deck.topic-page .deck-narrative { font-size: clamp(20px, 3.4vh, 40px); line-height: 1.7;
+  letter-spacing: 2px; color: #33291a; font-weight: 700; -webkit-line-clamp: 3; }
+.story-deck.topic-page .deck-copy::before,
+.story-deck.topic-page .deck-copy::after { content: ''; width: clamp(60px, 12vw, 150px); height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(140,110,60,.65), transparent); margin: 14px 0; }
+
+
+/* ═══════════ 发言区 v4：@点名标签 · 语音手动起止 ═══════════ */
+/* 输入框改成"外壳 + 裸 input"，让 @ 标签和录音状态能长在框里 */
+.input-shell { flex: 1; min-width: 0; display: flex; align-items: center; gap: 7px; height: 39px; padding: 0 13px;
+  background: rgba(251,248,240,.96); border: 1px solid rgba(140,110,60,.6); border-radius: 10px;
+  box-shadow: inset 0 1px 4px rgba(60,45,20,.15); transition: border-color .15s, background .15s; }
+.input-shell.focused { border-color: #b08a4a; background: #fff; }
+.input-shell #user-input, .input-shell #user-input:focus { flex: 1; min-width: 0; height: 100%;
+  padding: 0; font-size: 14px; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
+
+/* 点名标签：像聊天软件的「@谁谁谁」，底色取角色本色（JS 写 inline background）*/
+.mention-chip { display: none; align-items: center; gap: 2px; flex-shrink: 0; max-width: 40%;
+  height: 26px; padding: 0 4px 0 8px; border-radius: 6px; color: #fff;
+  border: 1px solid rgba(255,255,255,.34);
+  /* 角色本色由 JS 写 background-color；这层渐变把浅色角色压深，白字才不糊进底色 */
+  background-image: linear-gradient(180deg, rgba(0,0,0,.14), rgba(0,0,0,.42));
+  box-shadow: 0 1px 3px rgba(40,28,12,.3), inset 0 1px 0 rgba(255,255,255,.22); }
+.mention-chip.on { display: inline-flex; animation: chippop .18s cubic-bezier(.2,1.5,.5,1); }
+@keyframes chippop { from { transform: scale(.8); opacity: 0; } }
+/* @ 与名字都用纯白、不加阴影：小字号下阴影会把笔画糊住 */
+.mention-chip em { font-style: normal; font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13.5px; font-weight: 700; color: #fff; }
+.mention-chip b { font-weight: 700; font-size: 13.5px; letter-spacing: 1px; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mention-chip i { font-style: normal; font-size: 9.5px; line-height: 1; padding: 4px; border-radius: 4px;
+  color: #fff; cursor: pointer; opacity: .7; transition: all .15s; }
+.mention-chip i:hover { opacity: 1; background: rgba(255,255,255,.26); }
+
+/* 录音中：状态要显眼，起止全由玩家自己按 */
+.rec-badge { display: none; align-items: center; gap: 6px; flex-shrink: 0; height: 25px; padding: 0 9px;
+  border-radius: 6px; background: rgba(194,82,58,.14); border: 1px solid rgba(194,82,58,.45);
+  color: #9c3f2a; font-size: 11.5px; letter-spacing: 1px; }
+.rec-badge.on { display: inline-flex; }
+.rec-badge::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: #c2523a;
+  animation: recdot .9s infinite alternate; }
+.rec-badge b { font-weight: 700; font-variant-numeric: tabular-nums; }
+@keyframes recdot { from { opacity: .3; } to { opacity: 1; } }
+#btn-mic.rec { color: #ffd2be; }
+
+/* 发言闸门：导读 / 主持人讲述期间入口直接灰掉，别让人白打一段字才发现没人接 */
+.dock-control:disabled, .speak-primary:disabled { opacity: .4; filter: grayscale(.6); cursor: not-allowed; }
+.dock-control:disabled:hover, .speak-primary:disabled:hover { transform: none; filter: grayscale(.6); }
+.input-shell.off { opacity: .5; }
+#user-input:disabled { cursor: not-allowed; }
+
+/* 轮到你了：60 秒够说完一段话，跳过按钮做成实心，别让人以为只能干等 */
+.user-cue { padding-top: 58px; gap: 1px; }           /* 三行字都落在木牌上，不再压到吊绳 */
+.user-cue span { font-size: 14px; letter-spacing: 1.5px; }
+.user-cue i { letter-spacing: .5px; }
+.user-cue button { background: rgba(138,90,51,.14); color: #6b4a24; font-weight: 700; padding: 2px 12px; }
+.user-cue button:hover { background: rgba(138,90,51,.28); }
+
+/* 系统提示条：语音不可用等重要状态，必须让玩家看见，而不是静默失败 */
+#sys-notice { position: fixed; left: 50%; top: 58px; transform: translateX(-50%) translateY(-14px);
+  z-index: 90; max-width: 78vw; padding: 10px 22px; border-radius: 10px;
+  background: linear-gradient(180deg, rgba(255,251,240,.98), rgba(246,238,220,.98));
+  border: 1px solid rgba(150,115,60,.6); border-left: 4px solid var(--terra);
+  box-shadow: 0 6px 20px rgba(50,38,18,.28); font-size: 14px; letter-spacing: .5px; color: #4a3f2c;
+  opacity: 0; pointer-events: none; transition: opacity .3s, transform .3s; }
+#sys-notice.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* 开始页 hero 小屏适配（同上，摘自 129f16d） */
+@media (max-width: 760px) {
+  .start-heading { left: 4%; right: 4%; top: 15%; }
+  .start-heading h1 { font-size: clamp(34px, 8.5vw, 50px); letter-spacing: 3px; text-indent: 3px; }
+  .start-heading p { width: 86vw; font-size: clamp(12px, 3vw, 17px); letter-spacing: 1px; gap: 8px; }
+  .start-heading p::before, .start-heading p::after { width: 24px; }
+  .start-cast { left: -16%; right: -16%; bottom: 1%; height: 42%; }
+  .start-enter { bottom: 2.5%; width: 230px; height: 66px; font-size: 27px; }
+}
