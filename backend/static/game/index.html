@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>问道·未竟的论语</title>
-<link rel="stylesheet" href="/static/game/game.css?v=20260810-pr5">
+<title>稷下 · 论语圆桌</title>
+<link rel="stylesheet" href="/static/game/game.css?v=20260810-integrated2">
 </head>
 <body>
 
 <!-- ═══ 开始页 ═══ -->
 <section id="screen-start" class="screen active">
   <div class="start-card">
-    <div class="start-seal">问道</div>
-    <h1>问道·未竟的论语</h1>
+    <div class="start-seal">稷下</div>
+    <h1>稷下 · 论语圆桌</h1>
     <p class="start-sub">让《论语》重新吵起来</p>
     <div class="start-rule"></div>
     <p class="start-desc">
@@ -28,82 +28,97 @@
 <!-- ═══ 选哲学家 ═══ -->
 <section id="screen-select" class="screen">
   <div class="select-wrap">
-    <h2>请入席 <span class="select-hint">选 2–4 位同桌 · 孔子已在主位</span></h2>
+    <h2>请入席 <span class="select-hint">选 1–4 位同桌 · 孔子已在主位</span></h2>
     <div class="pick-grid" id="pick-grid"></div>
-    <div class="select-stories">
-      <span class="ss-label" id="story-list-label">今晚十篇</span>
-      <span id="story-list"></span>
-    </div>
+    <div class="select-stories" id="story-list"></div>
     <button class="btn-primary" id="btn-start-game" disabled>开始圆桌</button>
   </div>
 </section>
 
-<!-- ═══ 圆桌 ═══ -->
+<!-- ═══ 共享讲席 ═══ -->
 <section id="screen-table" class="screen">
   <header class="topbar">
     <div class="tb-left">
-      <span class="tb-logo">问道·未竟的论语</span>
+      <span class="tb-logo">稷下 · 论语圆桌</span>
       <span class="tb-story" id="tb-story"></span>
-    </div>
-    <div class="tb-right">
-      <button class="audio-control" id="btn-mute" aria-pressed="false" title="关闭所有角色与主持人的播放声音">
-        <span class="audio-icon">🔊</span><span class="audio-label">声音开启</span>
-      </button>
-      <button class="tb-btn" id="btn-pause">⏸ 暂停</button>
-      <button class="tb-btn" id="btn-log">📜 对话记录 <b id="log-count">0</b></button>
-      <button class="tb-btn tb-leave" id="btn-leave">结束会议</button>
+      <span class="tb-live">进行中</span>
     </div>
   </header>
 
-  <div class="table-main">
-    <!-- 左：故事剧场 -->
-    <aside class="theater">
-      <div class="slate" id="slate">
-        <div class="slate-rod"></div>
-        <div class="slate-body">
-          <div class="slate-reading">
-            <div class="slate-source" id="slate-source"></div>
-            <div class="slate-original" id="slate-original"></div>
+  <main class="stage" id="stage">
+    <div class="stage-bg"></div>
+
+    <!-- 竹卷轴讲席（导读 PPT / 议题投屏） -->
+    <section class="story-deck" id="story-deck" aria-label="故事讲席">
+      <img class="deck-frame" src="/static/assets/ui/gpt2/scroll-frame.png" alt="">
+      <div class="deck-paper">
+        <div class="deck-head">
+          <span class="deck-phase" id="deck-phase">故事导读</span>
+          <span class="deck-status" id="deck-status">主持人讲述中</span>
+          <span class="deck-head-ctas">
+            <button class="deck-cta" id="btn-original-deck"><img src="/static/assets/ui/scroll-mini.png" alt="">原文</button>
+            <button class="deck-cta" id="btn-deck-review"><img src="/static/assets/ui/scroll-mini.png" alt="">回看导读</button>
+            <button class="deck-cta" id="btn-skip-brief">跳过导读</button>
+          </span>
+        </div>
+        <div class="deck-content">
+          <div class="deck-visual" id="deck-visual" title="点击放大查看">
+            <img id="deck-img" alt="故事插画">
+            <span class="zoom-hint">点击放大</span>
           </div>
-          <div class="slate-tag" id="slate-tag">当前议题</div>
-          <div class="slate-text" id="slate-text"></div>
-          <button class="slate-orig" id="btn-original">📖 阅读提示</button>
+          <div class="deck-copy">
+            <div class="deck-source" id="deck-source"></div>
+            <h2 id="deck-title"></h2>
+            <p class="deck-narrative" id="deck-narrative"></p>
+          </div>
         </div>
-        <div class="slate-rod slate-rod-b"></div>
-      </div>
-      <div class="theater-strip"><img id="theater-img" alt="故事剧场"></div>
-    </aside>
-
-    <!-- 右：园林舞台 -->
-    <main class="stage" id="stage">
-      <div class="stage-bg"></div>
-      <div class="host-banner" id="host-banner"></div>
-      <div class="story-transition" id="story-transition"></div>
-      <div class="chapter-guide" id="chapter-guide">
-        <div class="chapter-guide-head"><b id="chapter-guide-progress">故事导读 1 / 3</b><span>主持人讲述中</span></div>
-        <div class="chapter-guide-body">
-          <div class="chapter-guide-visual"><img id="chapter-guide-img" alt="故事插图"></div>
-          <div class="chapter-guide-copy"><b id="chapter-guide-source"></b><h3 id="chapter-guide-title"></h3><p id="chapter-guide-text"></p><blockquote id="chapter-guide-quote"></blockquote></div>
+        <div class="deck-foot">
+          <div class="deck-dots" id="deck-dots"><i></i><i></i><i></i></div>
+          <div class="deck-narration" id="deck-narration">
+            <span id="deck-narration-name">主持人</span><b id="deck-narration-text"></b>
+          </div>
         </div>
-        <div class="chapter-guide-foot"><div id="chapter-guide-dots"></div><p><b>主持人</b><span id="chapter-guide-caption"></span></p><button id="chapter-guide-skip">跳过导读</button></div>
+        <!-- 回看模式的翻页控件 -->
+        <div class="review-nav">
+          <button id="btn-review-prev">‹ 上一页</button>
+          <button id="btn-review-orig">原文</button>
+          <button id="btn-review-next">下一页 ›</button>
+          <button id="btn-review-close" class="review-close">继续辩论 ▶</button>
+        </div>
       </div>
-      <div id="chars"></div>
-      <div class="bubble" id="bubble"><div class="bubble-name" id="bubble-name"></div><div class="bubble-meta" id="bubble-meta"></div><div class="bubble-text" id="bubble-text"></div></div>
-      <div class="think" id="think">…</div>
-      <div class="user-cue" id="user-cue">
-        <span>轮到你了</span><i id="cue-count">10</i>
-        <button id="btn-skip-cue">跳过</button>
-      </div>
-    </main>
-  </div>
+    </section>
 
-  <footer class="inputbar">
-    <div class="suggestion-list" id="suggestion-list" aria-label="推荐发言"></div>
-    <div class="input-row">
-      <input id="user-input" type="text" maxlength="120" placeholder="随时插话；点击场上的哲学家可点名提问…" autocomplete="off">
-      <button class="mic" id="btn-mic" title="语音发言（按一下开始/结束）">🎤</button>
-      <button class="btn-send" id="btn-send">发言</button>
-      <button class="btn-interrupt" id="btn-interrupt">✋ 打断</button>
+    <div id="chars"></div>
+    <div class="bubble" id="bubble"><div class="bubble-name" id="bubble-name"></div><div class="bubble-text" id="bubble-text"></div></div>
+    <div class="think" id="think"></div>
+    <div class="user-cue" id="user-cue">
+      <span>轮到你了</span><i id="cue-count">15</i>
+      <button id="btn-skip-cue">跳过</button>
+    </div>
+  </main>
+
+  <footer class="meeting-dock">
+    <div class="speech-tray" id="speech-tray" aria-hidden="true">
+      <div class="suggestion-list" id="suggestion-list" aria-label="推荐发言"></div>
+      <div class="utterance-box">
+        <button class="dock-control mic" id="btn-mic" title="语音发言（按一下开始/结束）"><span class="control-signet">语音</span></button>
+        <input id="user-input" type="text" maxlength="120" placeholder="说出你的想法；点击哲学家可点名提问…" autocomplete="off">
+        <button class="dock-control btn-send" id="btn-send">发送</button>
+        <button class="dock-control btn-interrupt" id="btn-interrupt">打断</button>
+        <button class="tray-close" id="btn-speech-close" title="收起发言区">收起</button>
+      </div>
+    </div>
+    <div class="meeting-toolbar">
+      <div class="toolbar-group toolbar-left">
+        <button class="dock-control" id="btn-mute" title="关闭声音"><span class="control-signet">声音</span><span class="control-label">开启</span></button>
+        <button class="dock-control" id="btn-pause" title="暂停"><span class="control-signet">暂停</span><span class="control-label">流程</span></button>
+        <button class="dock-control" id="btn-original"><span class="control-signet">原文</span></button>
+      </div>
+      <button class="speak-primary" id="btn-speak-open" aria-expanded="false"><span>我要发言</span><small>文字或语音</small></button>
+      <div class="toolbar-group toolbar-right">
+        <button class="dock-control" id="btn-log" title="对话记录"><span class="control-signet">记录</span><b id="log-count">0</b></button>
+        <button class="dock-control danger" id="btn-leave">结束会议</button>
+      </div>
     </div>
   </footer>
 
@@ -111,6 +126,14 @@
   <div class="drawer" id="drawer">
     <div class="drawer-head">对话记录 <button id="btn-drawer-close">✕</button></div>
     <div class="drawer-body" id="drawer-body"></div>
+  </div>
+
+  <!-- 插画灯箱 -->
+  <div class="modal lightbox" id="modal-image">
+    <div class="lightbox-inner">
+      <img id="lightbox-img" alt="故事插画大图">
+      <button class="btn-ghost" id="btn-image-close">合上</button>
+    </div>
   </div>
 
   <!-- 原文弹窗 -->
@@ -131,6 +154,6 @@
   </div>
 </section>
 
-<script src="/static/game/game.js?v=20260810-pr28"></script>
+<script src="/static/game/game.js?v=20260810-integrated2"></script>
 </body>
 </html>
