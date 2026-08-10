@@ -31,6 +31,12 @@ const CAST = {
 const SPRITE = (id, version = 'a') => `/static/assets/sprites/${id}-${version}.png`;
 const SPRITE_FRAMES = 15;
 const SELECTABLE_IDS = Object.keys(CAST).filter((id) => id !== 'player' && CAST[id].sprite);
+const SEAT_QUOTES = {
+  kongzi: '己所不欲，勿施于人。', socrates: '未经审视的人生不值得过。', hanfeizi: '法不阿贵，绳不挠曲。',
+  kant: '人是目的，绝不可只是手段。', laozi: '上善若水，水善利万物而不争。', zhuangzi: '天地与我并生，而万物与我为一。',
+  mozi: '兼相爱，交相利。', nietzsche: '成为你自己。', plato: '正义是各司其职。',
+  wangyangming: '知是行之始，行是知之成。', diogenes: '请别挡住我的阳光。',
+};
 const randomSpeakingPose = () => (Math.random() < 0.5 ? 'a' : 'b');
 const randomListeningPose = () => (Math.random() < 0.5 ? 'ia' : 'ib');
 function setSpritePose(id, version) {
@@ -98,6 +104,12 @@ const S = {
   turnEpoch: 0,
   chars: {},            // id → {el, x, bottom, scale}
   seatAssign: null,
+  seatQuoteAudio: {},
+  seatPreview: null,
+  seatPreviewStop: null,
+  seatPreviewToken: 0,
+  seatPrefetchQueue: [],
+  seatPrefetchActive: 0,
 };
 
 // ═══ 启动 ═══
@@ -114,7 +126,7 @@ async function boot() {
   renderStoryList();
   if (STORY_META) prefetchHost(STORIES[0], 'intro');
 
-  $('#btn-to-select').onclick = () => { renderPick(); show('#screen-select'); };
+  $('#btn-to-select').onclick = () => { startBgm(); renderPick(); show('#screen-select'); };
   $('#btn-start-game').onclick = startGame;
   $('#btn-send').onclick = submitUser;
   $('#user-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') submitUser(); });
@@ -179,6 +191,7 @@ function renderPick() {
     d.onmouseenter = () => { t = setInterval(() => setFrame(sp, pingpong(++f)), 130); };
     d.onmouseleave = () => { clearInterval(t); f = 0; setFrame(sp, 0); };
     d.onclick = () => {
+      previewSeatQuote(id, sp);
       if (id === 'kongzi') return;              // 孔子锁定主位
       if (picked.has(id)) picked.delete(id);
       else if (picked.size < 4) picked.add(id);
@@ -187,11 +200,48 @@ function renderPick() {
       $('#btn-start-game').textContent = `开始圆桌（${picked.size}人）`;
     };
     grid.appendChild(d);
+    if (canPlayAudio() && SEAT_QUOTES[id] && !S.seatQuoteAudio[id]) prefetchSeatQuote(id);
   });
   $('#btn-start-game').disabled = false;
   $('#btn-start-game').textContent = '开始圆桌（1人？至少再请一位）';
   $('#btn-start-game').disabled = true;
   grid._picked = picked;
+}
+
+function prefetchSeatQuote(id) {
+  if (id) S.seatPrefetchQueue.push(id);
+  while (S.seatPrefetchActive < 3 && S.seatPrefetchQueue.length) {
+    const next = S.seatPrefetchQueue.shift();
+    S.seatPrefetchActive++;
+    fetchTTS(next, SEAT_QUOTES[next]).then((audio) => { if (audio) S.seatQuoteAudio[next] = audio; })
+      .finally(() => { S.seatPrefetchActive--; prefetchSeatQuote(); });
+  }
+}
+
+async function previewSeatQuote(id, sprite) {
+  if (!canPlayAudio() || !SEAT_QUOTES[id]) return;
+  const token = ++S.seatPreviewToken;
+  S.seatPreviewStop?.();
+  let prepared = S.seatQuoteAudio[id];
+  if (!prepared) prepared = await fetchTTS(id, SEAT_QUOTES[id]);
+  if (token !== S.seatPreviewToken) return;
+  if (!prepared) return;
+  const audio = prepared.audio;
+  S.seatPreview = audio;
+  duckBgm();
+  let frame = 0;
+  const timer = setInterval(() => setFrame(sprite, pingpong(++frame)), 240);
+  const finish = () => {
+    clearInterval(timer);
+    try { audio.pause(); } catch {}
+    if (S.seatPreview === audio) S.seatPreview = null;
+    if (S.seatPreviewStop === finish) S.seatPreviewStop = null;
+    restoreBgm();
+  };
+  S.seatPreviewStop = finish;
+  audio.onended = audio.onerror = finish;
+  audio.currentTime = 0;
+  audio.play().catch(finish);
 }
 
 function setFrame(el, f) {
@@ -293,11 +343,11 @@ async function runGame() {
     if (STORIES[S.storyIdx + 1]) prefetchHost(STORIES[S.storyIdx + 1], 'intro');
     await circle(st, meta);                      // 第一圈
     if (S.aborted) break;
-    await userWindow(st, meta);                  // cue 玩家
+    const preEscalationResponders = await userWindow(st, meta); // cue 玩家
     if (S.aborted) break;
     S.escalated = true;                          // 议题升级
     slateUpgrade(meta);
-    await circle(st, meta);                      // 深入讨论：角色直接承接升级议题
+    await circle(st, meta, preEscalationResponders); // 避免刚回复玩家的人立刻重复
     if (S.aborted) break;
     await hostSpeak(st, 'outro', meta.host_outro);
     const nextStory = STORIES[S.storyIdx + 1];
@@ -335,19 +385,28 @@ function slateUpgrade(meta) {
 }
 
 // 一圈轮流发言；圈中随时可被玩家插话打断
-async function circle(st, meta) {
+function lastActualPhilosopher() {
+  for (let index = S.storyTranscript.length - 1; index >= 0; index--) {
+    const item = S.storyTranscript[index];
+    if (S.panel.includes(item.who) && item.text && !String(item.text).startsWith('【')) return item.who;
+  }
+  return null;
+}
+
+async function circle(st, meta, consumed = new Set()) {
   for (let i = 0; i < S.order.length && !S.aborted; i++) {
     await waitForFlow();
     const id = S.order[i];
     // 圈位边界处理插话；若正好是本位答的玩家，就算他这一轮已发言
     const responded = await drainUser(st, i);
     if (S.aborted) return;
-    if (responded.has(id)) continue;
+    if (responded.has(id) || consumed.has(id)) continue;
     const next = S.order[i + 1];
     const relation = i === 0
       ? (S.escalated ? 'reconsider' : 'open_view')
       : (i % 2 ? 'build_on' : 'challenge');
-    const replyTo = i === 0 ? '当前情境' : CAST[S.order[i - 1]].name;
+    const previous = lastActualPhilosopher();
+    const replyTo = previous ? CAST[previous].name : '当前情境';
     const prefetchNext = next ? {
       id: next,
       relation: (i + 1) % 2 ? 'build_on' : 'challenge',
@@ -658,7 +717,7 @@ async function typewriterWait(text) {
 }
 
 // ═══ 主持人 ═══
-async function hostSpeak(st, task, fallback) {
+async function hostSpeak(st, task, fallback, onReady = null) {
   const epoch = S.turnEpoch;
   await waitForFlow();
   const key = hostKey(st, task);
@@ -666,6 +725,7 @@ async function hostSpeak(st, task, fallback) {
   delete S.hostPrefetch[key];
   if (S.aborted || epoch !== S.turnEpoch) return null;
   const text = prepared?.text || fallback;
+  onReady?.(text);
   await hostSay(text, prepared?.audioPromise, epoch);
   return text;
 }
@@ -758,8 +818,9 @@ async function fetchHostTTS(text) {
 
 // cue 玩家：倒计时窗口
 async function userWindow(st, meta) {
-  const cueQuestion = await hostSpeak(st, 'cue', meta.host_user_cue);
-  refreshSuggestions(st, 'host_question', cueQuestion);
+  await hostSpeak(st, 'cue', meta.host_user_cue, (text) => {
+    refreshSuggestions(st, 'host_question', text);
+  });
   const cueEl = $('#user-cue');
   cueEl.classList.add('on');
   S.cueActive = true;
@@ -778,7 +839,7 @@ async function userWindow(st, meta) {
   }
   S.cueActive = false;
   cueEl.classList.remove('on');
-  await drainUser(st, 0);
+  return drainUser(st, 0);
 }
 
 function holdFlowForInput() {
