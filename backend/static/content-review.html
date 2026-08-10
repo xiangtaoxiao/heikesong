@@ -72,8 +72,8 @@
     <section class="view active" id="overview">
       <div class="hero">
         <div class="eyebrow">Content audit · 2026.08.10</div>
-        <h1>框架已经成立，内容却被兜底机制“掐平”了</h1>
-        <p class="lede">代码层面已经能让每位哲学家看到<strong>本篇此前的全部公开对话</strong>，第二轮也有专门的论证规划；但当前上游请求实测返回 403，导致首轮反复使用一条与故事无关的通用台词，第二轮直接沉默。这是目前“无聊、没有深度”的第一原因。</p>
+        <h1>生成链路正常，内容问题主要在节奏与角色变化</h1>
+        <p class="lede">连续实测确认：当前十位哲学家都能正常现场生成，并能看到<strong>本篇此前的全部公开对话</strong>；同一输入重复请求也会得到不同台词，第二轮的私有论证规划能够正常工作。现在真正要攻坚的，是主持人口播过长、部分角色套路化、幽默机制没有接线，以及十篇之间缺少连续记忆。</p>
         <div class="meta"><span class="pill">10 位可玩哲学家</span><span class="pill">10 篇故事</span><span class="pill">30 页预写导读</span><span class="pill">首轮 / 升级轮现场生成</span><span class="pill">本地运行实测</span></div>
       </div>
 
@@ -82,27 +82,27 @@
         <div class="card metric good"><b>8 / 10</b><span>角色 Persona 的思想区分度</span></div>
         <div class="card metric good"><b>完整</b><span>本篇上下文传递</span></div>
         <div class="card metric warn"><b>108 字</b><span>平均每页主持人口播，偏长</span></div>
-        <div class="card metric bad"><b>403</b><span>当前对话上游实测结果</span></div>
+        <div class="card metric good"><b>10 / 10</b><span>当前可玩角色现场生成通过</span></div>
       </div>
 
-      <h2>必须先处理的五件事</h2>
+      <h2>必须先处理的六件事</h2>
       <div class="grid grid-2">
-        <div class="card finding"><span class="rank p0">P0</span><div><h3>先恢复真实生成链路</h3><p>当前每次哲学家请求重试 3 次仍返回 403。首轮退化成通用 fallback，升级轮因已有 speaker history 而直接 <code>pass</code>。不先修这一层，继续磨提示词几乎不会被玩家看到。</p></div></div>
-        <div class="card finding"><span class="rank p0">P0</span><div><h3>兜底内容必须“角色 × 故事 × 轮次”</h3><p>现在每位角色只有一句全局兜底，十篇都会复读同一句。建议至少准备 10 × 10 × 2 的短台词矩阵，并允许它接住上一位观点。</p></div></div>
         <div class="card finding"><span class="rank p0">P0</span><div><h3>修正第九篇玩家追问</h3><p>《三人行》当前 cue 是“既不纵容泄露，也不把洞见压掉”，但前文没有任何“泄露”情境，属于明显串稿。</p></div></div>
         <div class="card finding"><span class="rank p1">P1</span><div><h3>主持人少讲 40%，多留悬念</h3><p>30 页导读共 3234 字，平均每页 108 字。多篇在开辩前已经替玩家完成了价值判断，既显得考究，也压缩了哲学家的空间。</p></div></div>
         <div class="card finding"><span class="rank p1">P1</span><div><h3>把幽默写进互动任务</h3><p>系统虽然允许 <code>tease</code>，实际轮次只派发承接或挑战。幽默主要靠庄子、第欧根尼偶然发挥。应加入“善意拆台、角色互相认梗、回收前文梗”的明确任务。</p></div></div>
         <div class="card finding"><span class="rank p1">P1</span><div><h3>一局不宜默认跑完十篇</h3><p>仅 30 页导读就约需 8–10 分钟；再加两圈发言，一局容易超过 20 分钟。建议十篇作为题库，默认一局 3 篇，按“关系 → 公共 → 自我”组成一条弧线。</p></div></div>
+        <div class="card finding"><span class="rank p1">P1</span><div><h3>给十篇加一条跨篇记忆</h3><p>角色会完整读取当前故事，却会在下一篇清空 transcript。建议保留玩家上一题的选择、两位角色的核心分歧和一个可回收的梗，让整场 Meeting 真正形成主线。</p></div></div>
+        <div class="card finding"><span class="rank p1">P1</span><div><h3>把 fallback 当保险，不当主流程</h3><p>本轮测试生成正常；但上游曾出现一次短暂 403。现有兜底每人只有一句、升级轮会跳过，建议后续补充故事相关兜底，以防比赛现场网络波动。</p></div></div>
       </div>
 
-      <div class="callout good"><strong>值得保留的核心：</strong>完整本篇 transcript、关系账本、抢麦权重、第二轮私有论证卡、静默跳过和玩家插话，都是好机制。问题不是推倒重来，而是让真实生成稳定可用，并给主持人口播做强编辑。</div>
+      <div class="callout good"><strong>值得保留的核心：</strong>完整本篇 transcript、关系账本、抢麦权重、第二轮私有论证卡、静默跳过和玩家插话都已正常工作。问题不是推倒重来，而是给主持人口播做强编辑，并让每位角色拥有更多不同的论证与喜剧姿态。</div>
     </section>
 
     <section class="view" id="roles">
       <div class="hero">
         <div class="eyebrow">Persona review</div>
         <h1>十位可玩人物：谁像本人，谁只是“哲学标签”</h1>
-        <p class="lede">评分同时考虑 Persona 配置、私有 Skill、当前 fallback 和真实调用链。逻辑分反映能否承接上下文；趣味分不是“讲段子”，而是角色能否用自己的怪脾气让讨论活起来。</p>
+        <p class="lede">评分同时考虑 Persona 配置、私有 Skill、十位角色的现场生成样本和异常时 fallback。逻辑分反映能否承接上下文；趣味分不是“讲段子”，而是角色能否用自己的怪脾气让讨论活起来。</p>
       </div>
       <div class="filterbar"><button class="on" data-filter="all">全部 10 位</button><button data-filter="cn">中国古代</button><button data-filter="west">外国人物</button><button data-filter="risk">优先修改</button></div>
       <div class="grid" id="role-list"></div>
@@ -123,7 +123,7 @@
         <div class="step"><b>02 三页导读</b>每页固定图文 + 固定口播<em>全部预先写好</em></div>
         <div class="step"><b>03 第一圈</b>每人现场生成一次<em>抢麦顺序动态</em></div>
         <div class="step"><b>04 玩家 + 升级</b>15 秒 cue，改变条件<em>cue / 升级均预写</em></div>
-        <div class="step"><b>05 第二圈</b>私有论证卡后再发言<em>失败时当前会静默</em></div>
+        <div class="step"><b>05 第二圈</b>私有论证卡后再发言<em>实测正常推进</em></div>
       </div>
 
       <h2>内容来源分界</h2>
@@ -154,7 +154,7 @@
           <tr><td>第二轮真的增加了推理吗？</td><td class="yes">设计上是</td><td>先生成五项私有论证卡，再生成可播报台词；同时检查与自己、他人的重复。</td><td>这是当前最有价值的深度机制。</td></tr>
           <tr><td>记得前一篇故事中的玩家立场吗？</td><td class="no">否</td><td>每篇开头执行 <code>S.storyTranscript = []</code>。</td><td>十篇之间没有人物关系或思想成长弧线。</td></tr>
           <tr><td>关系账本是完整历史吗？</td><td class="no">否</td><td>只保留最近 6 次 speaker → address → move。</td><td>足够轮换互动，但不能形成长期恩怨或同盟。</td></tr>
-          <tr><td>当前真实运行能走到这些提示词吗？</td><td class="no">本机不能</td><td>2026-08-10 对话上游连续返回 HTTP 403，3 次重试后走 fallback。</td><td>首轮变成固定台词，第二轮静默；深度机制完全旁路。</td></tr>
+          <tr><td>当前真实运行能走到这些提示词吗？</td><td class="yes">是</td><td>2026-08-10 复测：十位角色全部现场生成；同输入在 8001 / 8002 各连续三次均产生不同台词；升级轮三位角色均正常发言。</td><td>生成、上下文承接和第二轮推进均已生效。此前曾有一次短暂 403，但不是当前持续状态。</td></tr>
         </tbody>
       </table>
 
@@ -206,7 +206,7 @@ function renderRoles(filter='all'){
     <div class="role-head"><h3>${r.name}</h3><div>${r.tag}</div><span class="status ${r.statusClass}">${r.status}</span>
       ${Object.entries(r.scores).map(([k,v])=>`<div class="score"><span>${k}</span><span class="bar"><i style="width:${v*10}%"></i></span><strong>${v}</strong></div>`).join('')}
     </div>
-    <div class="role-body"><div class="summary">${r.summary}</div><div class="twocol"><div class="box"><b>做得好的</b>${r.good}</div><div class="box risk"><b>当前风险</b>${r.risk}</div></div><div class="box"><b>具体优化</b>${r.fix}</div><div class="quote">“${r.sample}”<small>建议的目标语感示例，不是历史原文</small></div><div class="quote">当前通用兜底：“${r.fallback}”<small>这句会跨十篇重复，是运行时最大问题之一</small></div></div>
+    <div class="role-body"><div class="summary">${r.summary}</div><div class="twocol"><div class="box"><b>做得好的</b>${r.good}</div><div class="box risk"><b>当前风险</b>${r.risk}</div></div><div class="box"><b>具体优化</b>${r.fix}</div><div class="quote">“${r.sample}”<small>建议的目标语感示例，不是历史原文</small></div><div class="quote">异常兜底：“${r.fallback}”<small>正常生成时不会出现；仅用于上游暂时不可用的保险场景</small></div></div>
   </article>`).join('');
 }
 
@@ -222,7 +222,7 @@ function renderStories(stories){
       <div class="runline"><b>第一圈辩题</b><span>${esc(s.focal)}（每位哲学家现场生成一次）</span></div>
       <div class="runline"><b>点到玩家</b><span>${esc(s.host_user_cue)}</span></div>
       <div class="runline"><b>议题升级</b><span>${esc(s.host_escalation_line)}<br><small>配置条件：${esc(s.escalation)}</small></span></div>
-      <div class="runline"><b>第二圈</b><span>每位哲学家先做私有论证卡，再围绕升级条件现场生成；当前上游失败时会直接静默。</span></div>
+      <div class="runline"><b>第二圈</b><span>每位哲学家先做私有论证卡，再围绕升级条件现场生成；当前复测能够正常承接第一轮并推进。</span></div>
       <div class="runline"><b>篇末收束</b><span>${esc(s.host_outro)}</span></div>
       <div class="editor-note"><strong>编辑判断：</strong>${n.note}</div></div></details>`;
   }).join('');
