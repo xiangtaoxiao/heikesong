@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>稷下 · 论语圆桌</title>
-<link rel="stylesheet" href="/static/game/game.css?v=20260810-integrated2">
+<link rel="stylesheet" href="/static/game/game.css?v=20260810-integrated4">
 </head>
 <body>
 
@@ -57,7 +57,6 @@
           <span class="deck-status" id="deck-status">主持人讲述中</span>
           <span class="deck-head-ctas">
             <button class="deck-cta" id="btn-original-deck"><img src="/static/assets/ui/scroll-mini.png" alt="">原文</button>
-            <button class="deck-cta" id="btn-deck-review"><img src="/static/assets/ui/scroll-mini.png" alt="">回看导读</button>
             <button class="deck-cta" id="btn-skip-brief">跳过导读</button>
           </span>
         </div>
@@ -73,17 +72,14 @@
           </div>
         </div>
         <div class="deck-foot">
-          <div class="deck-dots" id="deck-dots"><i></i><i></i><i></i></div>
+          <div class="deck-pager">
+            <button class="deck-page" id="btn-deck-prev" title="上一页（←）">‹</button>
+            <div class="deck-dots" id="deck-dots"><i></i><i></i><i></i></div>
+            <button class="deck-page" id="btn-deck-next" title="下一页（→）">›</button>
+          </div>
           <div class="deck-narration" id="deck-narration">
             <span id="deck-narration-name">主持人</span><b id="deck-narration-text"></b>
           </div>
-        </div>
-        <!-- 回看模式的翻页控件 -->
-        <div class="review-nav">
-          <button id="btn-review-prev">‹ 上一页</button>
-          <button id="btn-review-orig">原文</button>
-          <button id="btn-review-next">下一页 ›</button>
-          <button id="btn-review-close" class="review-close">继续辩论 ▶</button>
         </div>
       </div>
     </section>
@@ -113,6 +109,8 @@
         <button class="dock-control" id="btn-mute" title="关闭声音"><span class="control-signet">声音</span><span class="control-label">开启</span></button>
         <button class="dock-control" id="btn-pause" title="暂停"><span class="control-signet">暂停</span><span class="control-label">流程</span></button>
         <button class="dock-control" id="btn-original"><span class="control-signet">原文</span></button>
+        <button class="dock-control" id="btn-skip-turn" title="跳过当前发言，换下一位"><span class="control-signet">下一位</span></button>
+        <button class="dock-control" id="btn-skip-story" title="跳过本篇，直接进入下一个故事"><span class="control-signet">下一篇</span></button>
       </div>
       <button class="speak-primary" id="btn-speak-open" aria-expanded="false"><span>我要发言</span><small>文字或语音</small></button>
       <div class="toolbar-group toolbar-right">
@@ -154,6 +152,6 @@
   </div>
 </section>
 
-<script src="/static/game/game.js?v=20260810-integrated2"></script>
+<script src="/static/game/game.js?v=20260810-integrated4"></script>
 </body>
 </html>

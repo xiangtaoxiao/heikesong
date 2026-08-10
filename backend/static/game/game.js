@@ -48,6 +48,43 @@ function setSpriteVer(id, ver) {
   if (c) c.el.querySelector('.sprite').style.backgroundImage = `url('${SPRITE(id, ver)}')`;
 }
 
+// 抢麦触发词：一个哲学家是什么，就等于他被什么话激怒
+const TRIGGERS = {
+  kongzi:       ['孝', '爹', '父', '母', '家', '劝', '礼', '仁', '亲情', '心安', '良心', '规矩'],
+  socrates:     ['直', '应该', '正义', '知道', '定义', '确定', '为什么', '凭什么', '什么是', '真话'],
+  hanfeizi:     ['法', '国', '制度', '规则', '举报', '官', '赏', '罚', '大家都', '社会', '秩序', '乱'],
+  kant:         ['撒谎', '真话', '谎', '义务', '原则', '例外', '底线', '普遍', '尊严'],
+  laozi:        ['忘', '争', '放下', '自然', '无所谓', '算了', '看开', '本来'],
+  zhuangzi:     ['死', '丧', '哭', '难过', '悲', '生死', '安', '想通', '意义', '梦'],
+  mozi:         ['算', '钱', '粮', '利', '亏', '成本', '值得', '天下', '公平', '穷'],
+  wangyangming: ['心', '知', '行', '良知', '自欺', '当下', '明白'],
+  nietzsche:    ['宽恕', '原谅', '忍', '弱', '强', '报复', '怨', '恨', '道德', '高尚'],
+  diogenes:     ['我的', '体面', '名声', '面子', '虚伪', '财产', '规矩'],
+};
+
+// 最近一句公开发言的文本（抢麦据此判断谁被戳到）
+function lastSpeechText() {
+  for (let i = S.storyTranscript.length - 1; i >= 0; i--) {
+    const t = S.storyTranscript[i];
+    if (t && t.text) return t.text;
+  }
+  return '';
+}
+
+// 从待发言池里挑"最憋不住"的人：触发词命中 + 久未发言加权 − 刚说过惩罚
+function grabMic(pool, lastText = '') {
+  let best = pool[0], bestScore = -1e9;
+  for (const id of pool) {
+    let score = Math.random() * 2;
+    (TRIGGERS[id] || []).forEach((kw) => { if (lastText.includes(kw)) score += 2.6; });
+    if (S.lastSpeakers[0] === id) score -= 6;
+    else if (S.lastSpeakers[1] === id) score -= 2;
+    else score += 1.6;                                  // 久未开口的人更想说
+    if (score > bestScore) { bestScore = score; best = id; }
+  }
+  return best;
+}
+
 const STORIES = [
   { id: 's1', title: '一只羊',     source: '《论语·子路》13.18', focal: '这个儿子做对了吗？' },
   { id: 's2', title: '门口的仇人', source: '《论语·宪问》14.34', focal: '该怎么对待伤害过你的人？' },
@@ -71,12 +108,12 @@ const S = {
   audioMuted: false,
   running: false, aborted: false, briefing: false, skipBriefing: false,
   paused: false, inputHold: false, flowWaiters: [], // 暂停/输入即停（移植）
-  reviewingDeck: false,
   suggestionToken: 0,
   audio: null, finishAudio: null, bgm: null,
   seatPreview: null,
   animTimer: null,
   prefetch: {}, chars: {},
+  lastSpeakers: [], skipTurn: false, skipStory: false, deckPage: 0, deckBeats: [],
 };
 
 // ═══ 启动 ═══
@@ -109,11 +146,15 @@ async function boot() {
   $('#btn-speech-close').onclick = () => openSpeechTray(false);
   $('#btn-skip-brief').onclick = () => { S.skipBriefing = true; stopCurrentAudio(); };
   $('#btn-skip-cue').onclick = () => { S.cueSkip = true; };
-  $('#btn-deck-review').onclick = openDeckReview;
-  $('#btn-review-close').onclick = closeDeckReview;
-  $('#btn-review-prev').onclick = () => flipReview(-1);
-  $('#btn-review-next').onclick = () => flipReview(1);
-  $('#btn-review-orig').onclick = () => $('#modal-original').classList.add('open');
+  $('#btn-deck-prev').onclick = () => flipDeck(-1);
+  $('#btn-deck-next').onclick = () => flipDeck(1);
+  $('#btn-skip-turn').onclick = skipCurrentTurn;
+  $('#btn-skip-story').onclick = skipCurrentStory;
+  document.addEventListener('keydown', (e) => {
+    if (document.activeElement === $('#user-input')) return;
+    if (e.key === 'ArrowLeft') flipDeck(-1);
+    if (e.key === 'ArrowRight') flipDeck(1);
+  });
   $('#deck-visual').onclick = openDeckImage;
   $('#btn-image-close').onclick = closeDeckImage;
   $('#modal-image').onclick = (e) => { if (e.target.id === 'modal-image') closeDeckImage(); };
@@ -348,7 +389,20 @@ async function startGame() {
   runGame().catch((e) => console.error(e));
 }
 
+async function fetchWelcome() {
+  try {
+    const r = await fetch('/api/game/welcome', { method: 'POST' });
+    if (!r.ok) throw new Error('bad');
+    return (await r.json()).speech;
+  } catch { return '各位贤者，晚上好。今晚咱们聊几桩《论语》里吵了两千年的旧事，诸位随意开口。'; }
+}
+
 async function runGame() {
+  const welcome = await fetchWelcome();            // 全局开场：先问好，再进第一篇
+  $('#deck-title').textContent = '稷下 · 论语圆桌';
+  $('#deck-narrative').textContent = '今晚同席：' + S.panel.map((p) => CAST[p].name).join('、') + '，以及旁听的你。';
+  await hostSay(welcome);
+
   for (S.storyIdx = 0; S.storyIdx < STORIES.length && !S.aborted; S.storyIdx++) {
     const st = STORIES[S.storyIdx];
     const meta = STORY_META.stories.find((x) => x.id === st.id);
@@ -359,21 +413,23 @@ async function runGame() {
     setTheater(st, meta);
     await $('#deck-img').decode().catch(() => {});   // 图先落卷轴，主持人再开口
     const beats = deckBeats(st, meta);
-    if (canPlayAudio()) {
-      beats.forEach((b) => warmTTS('host', b.narration));
-      warmTTS('host', meta.host_user_cue);
-      warmTTS('host', meta.host_escalation_line);
-      warmTTS('host', meta.host_outro);
-    }
+    if (canPlayAudio()) warmHostQueue([
+      ...beats.map((b) => b.narration),
+      meta.host_user_cue, meta.host_escalation_line, meta.host_outro,
+    ]);
+    S.skipStory = false;
     await runStoryBriefing(st, meta);                 // 导读：人物静止
     if (S.aborted) break;
+    if (S.skipStory) { await afterStory(st); continue; }
     Object.keys(S.chars).forEach(startIdle);          // 开席：进入聆听
     refreshSuggestions(st, 'source');
     S.prefetch[pfKey(S.order[0])] = fetchTurn(S.order[0], st, null);
     await circle(st, meta);
     if (S.aborted) break;
+    if (S.skipStory) { await afterStory(st); continue; }
     await userWindow(meta.host_user_cue, st);
     if (S.aborted) break;
+    if (S.skipStory) { await afterStory(st); continue; }
     S.escalated = true;
     slateUpgrade(meta);
     await hostSay(meta.host_escalation_line);
@@ -382,14 +438,25 @@ async function runGame() {
     S.prefetch[pfKey(S.order[0])] = fetchTurn(S.order[0], st, null);
     await circle(st, meta);
     if (S.aborted) break;
-    await hostSay(meta.host_outro);
+    if (!S.skipStory) await hostSay(meta.host_outro);
     const nextStory = STORIES[S.storyIdx + 1];
     if (nextStory && !S.aborted) await showStoryTransition(nextStory);
+    S.skipStory = false;
   }
   if (!S.aborted) showReport();
 }
 
 // ═══ 卷轴讲席（导读 PPT / 议题投屏）═══
+// 篇末收尾：清残留、放过渡；跳过本篇时也走这里
+async function afterStory(st) {
+  S.skipStory = false;
+  stopCurrentAudio();
+  hideBubble();
+  showThink(null, false);
+  const next = STORIES[S.storyIdx + 1];
+  if (next && !S.aborted) await showStoryTransition(next);
+}
+
 function deckBeats(st, meta) {
   if (meta.guide_slides?.length) {
     const focuses = ['center 12%', 'center 50%', 'center 88%'];
@@ -433,7 +500,7 @@ async function runStoryBriefing(st, meta) {
   $('#story-deck').classList.add('briefing');
   $('#deck-status').textContent = '主持人讲述中';
   renderDeckDots(beats.length);
-  for (let i = 0; i < beats.length && !S.aborted; i++) {
+  for (let i = 0; i < beats.length && !S.aborted && !S.skipStory; i++) {
     await waitForFlow();
     showDeckSlide(beats, i);
     await hostSay(beats[i].narration, { inDeck: true });
@@ -443,13 +510,33 @@ async function runStoryBriefing(st, meta) {
   enterDebateDeck(st, meta);
 }
 
-function showDeckSlide(beats, i) {
+// 统一的幻灯片状态：S.deckBeats + S.deckPage，导读与自由翻页共用一套
+function renderDeckPage() {
+  const beats = S.deckBeats;
+  if (!beats || !beats.length) return;
+  const i = Math.max(0, Math.min(beats.length - 1, S.deckPage));
+  S.deckPage = i;
   const beat = beats[i];
-  $('#deck-phase').textContent = `故事导读 ${i + 1}/${beats.length}`;
   $('#deck-title').textContent = beat.title;
   $('#deck-narrative').textContent = beat.caption || beat.narration;
   $('#deck-img').style.objectPosition = beat.image_focus || 'center';
   document.querySelectorAll('#deck-dots i').forEach((dot, idx) => dot.classList.toggle('on', idx === i));
+  $('#deck-phase').textContent = S.briefing ? `故事导读 ${i + 1}/${beats.length}` : `第 ${i + 1}/${beats.length} 页`;
+  $('#btn-deck-prev').disabled = i === 0;
+  $('#btn-deck-next').disabled = i === beats.length - 1;
+}
+
+function flipDeck(delta) {
+  if (!S.deckBeats.length) return;
+  S.deckPage += delta;
+  renderDeckPage();
+  if (!S.briefing) $('#deck-status').textContent = '回看故事';
+}
+
+function showDeckSlide(beats, i) {
+  S.deckBeats = beats;
+  S.deckPage = i;
+  renderDeckPage();
 }
 
 function renderDeckDots(n) {
@@ -458,16 +545,18 @@ function renderDeckDots(n) {
 
 function enterDebateDeck(st, meta) {
   $('#story-deck').classList.remove('briefing');
-  $('#deck-phase').textContent = S.escalated ? '议题升级' : '当前议题';
+  $('#screen-table').classList.add('debating');
+  // 故事各页 + 末页「当前议题」，辩论期可随时左右翻回去看
+  const pages = [...deckBeats(st, meta), {
+    title: S.escalated ? '议题升级' : st.focal,
+    narration: S.escalated ? meta.escalation.replace(/^议题升级——/, '') : meta.scene,
+    image_focus: 'center 48%',
+  }];
+  S.deckBeats = pages;
+  S.deckPage = pages.length - 1;
+  renderDeckDots(pages.length);
+  renderDeckPage();
   $('#deck-status').textContent = '开席论辩';
-  $('#deck-title').textContent = st.focal;
-  $('#deck-narrative').textContent = S.escalated
-    ? meta.escalation.replace(/^议题升级——/, '')
-    : meta.scene;
-  $('#deck-img').style.objectPosition = 'center 48%';
-  $('#deck-narration-name').textContent = '当前议题';
-  $('#deck-narration-text').textContent = st.focal;
-  document.querySelectorAll('#deck-dots i').forEach((dot) => dot.classList.add('on'));
 }
 
 function slateUpgrade(meta) {
@@ -480,34 +569,6 @@ function slateUpgrade(meta) {
 }
 
 // ── 回看导读：随时翻回 PPT，自动暂停辩论 ──
-function openDeckReview() {
-  if (!S.running || S.briefing) return;
-  const st = STORIES[S.storyIdx];
-  const meta = STORY_META.stories.find((x) => x.id === st.id);
-  S.reviewingDeck = true;
-  S.reviewBeats = deckBeats(st, meta);
-  S.reviewIdx = 0;
-  if (!S.paused) togglePause(true);
-  $('#story-deck').classList.add('reviewing');
-  renderDeckDots(S.reviewBeats.length);
-  flipReview(0);
-}
-function flipReview(delta) {
-  if (!S.reviewingDeck) return;
-  S.reviewIdx = Math.max(0, Math.min(S.reviewBeats.length - 1, S.reviewIdx + delta));
-  showDeckSlide(S.reviewBeats, S.reviewIdx);
-  $('#deck-phase').textContent = `回看导读 ${S.reviewIdx + 1}/${S.reviewBeats.length}`;
-  $('#deck-status').textContent = '辩论已暂停';
-}
-function closeDeckReview() {
-  if (!S.reviewingDeck) return;
-  S.reviewingDeck = false;
-  $('#story-deck').classList.remove('reviewing');
-  const st = STORIES[S.storyIdx];
-  const meta = STORY_META.stories.find((x) => x.id === st.id);
-  enterDebateDeck(st, meta);
-  if (S.paused) togglePause(false);
-}
 
 // ═══ 辩论圈 ═══
 function lastActualPhilosopher() {
@@ -519,27 +580,36 @@ function lastActualPhilosopher() {
 }
 
 async function circle(st, meta) {
-  for (let i = 0; i < S.order.length && !S.aborted; i++) {
-    const id = S.order[i];
+  const pool = [...S.order];                       // 本轮每人仍只说一次，但顺序由抢麦决定
+  let pos = 0;
+  while (pool.length && !S.aborted && !S.skipStory) {
     await waitForFlow();
-    const responded = await drainUser(st, i);
-    if (S.aborted) return;
-    if (responded === id) continue;
+    const responded = await drainUser(st, pos);
+    if (S.aborted || S.skipStory) return;
+    if (responded) {
+      const at = pool.indexOf(responded);
+      if (at >= 0) pool.splice(at, 1);
+      if (!pool.length) break;
+    }
     await waitForFlow();
-    const next = S.order[i + 1];
+    const id = S.grabbed && pool.includes(S.grabbed) ? S.grabbed : grabMic(pool, lastSpeechText());
+    S.grabbed = null;
+    pool.splice(pool.indexOf(id), 1);
     const previous = lastActualPhilosopher();
-    const relation = i === 0 ? (S.escalated ? 'reconsider' : 'open_view') : (i % 2 ? 'build_on' : 'challenge');
+    const relation = pos === 0 ? (S.escalated ? 'reconsider' : 'open_view') : (pos % 2 ? 'build_on' : 'challenge');
     await speak(id, st, {
       relation,
       replyTo: previous ? CAST[previous].name : '当前情境',
-      prefetchNext: next ? {
-        id: next,
-        relation: (i + 1) % 2 ? 'build_on' : 'challenge',
-        replyTo: CAST[id].name,
+      // 本句文本一到手就抢下一位并预取，发言间隙才压得住
+      pickNext: pool.length ? (text) => {
+        const nid = grabMic(pool, text);
+        S.grabbed = nid;
+        return { id: nid, relation: (pos + 1) % 2 ? 'build_on' : 'challenge', replyTo: CAST[id].name };
       } : null,
     });
+    pos++;
   }
-  await drainUser(st, 0);
+  if (!S.skipStory) await drainUser(st, 0);
 }
 
 async function drainUser(st, circlePos) {
@@ -584,20 +654,25 @@ async function speak(id, st, opts = {}) {
   if (S.aborted || !turn || !turn.text) return;
   await waitForFlow();
 
-  if (opts.prefetchNext && !S.pendingUser) {
-    const next = opts.prefetchNext;
-    S.prefetch[pfKey(next.id)] = fetchTurn(
-      next.id,
-      st,
-      null,
-      [...S.storyTranscript, { who: id, name: CAST[id].name, text: turn.text }],
-      next.relation,
-      next.replyTo,
-    );
+  if (opts.pickNext && !S.pendingUser) {
+    const next = opts.pickNext(turn.text);
+    if (next) {
+      S.prefetch[pfKey(next.id)] = fetchTurn(
+        next.id,
+        st,
+        null,
+        [...S.storyTranscript, { who: id, name: CAST[id].name, text: turn.text }],
+        next.relation,
+        next.replyTo,
+      );
+    }
   }
 
   pushLine(id, CAST[id].name, turn.text);
   recordRelationship(id, turn);
+  S.lastSpeakers.unshift(id);
+  S.lastSpeakers = S.lastSpeakers.slice(0, 2);
+  S.skipTurn = false;
   focusChar(id, true);
   showBubble(id, turn.text);
   setSpriteVer(id, randVer());
@@ -607,16 +682,17 @@ async function speak(id, st, opts = {}) {
 
   if (canPlayAudio()) {
     const wav = turn.wav || await fetchTTS(id, turn.text);
-    if (wav && !S.interruptFlag && !S.aborted && canPlayAudio()) await playAudio(wav);
-    else await sleep(readTime(turn.text));
-  } else {
+    if (wav && !S.interruptFlag && !S.aborted && !S.skipTurn && canPlayAudio()) await playAudio(wav);
+    else if (!S.skipTurn) await sleep(readTime(turn.text));
+  } else if (!S.skipTurn) {
     await typewriterWait(turn.text);
   }
 
   $('#btn-interrupt').classList.remove('on');
   stopAnim();
   if (S.interruptFlag) $('#bubble').classList.add('interrupted');
-  else await sleep(300);
+  else if (!S.skipTurn) await sleep(300);
+  S.skipTurn = false;
   hideBubble();
   focusChar(id, false);
 }
@@ -630,6 +706,15 @@ function recordRelationship(speaker, turn) {
 }
 
 S.ttsCache = new Map();
+// 串行预热：同时并发多条会被上游 TTS 限流，失败后退化成静音等待（听感就是"主持人卡住"）
+function warmHostQueue(lines) {
+  const queue = lines.filter(Boolean);
+  S.warmChain = (S.warmChain || Promise.resolve());
+  queue.forEach((line) => {
+    S.warmChain = S.warmChain.then(() => warmTTS('host', line)).catch(() => null);
+  });
+}
+
 function warmTTS(who, text) {
   const k = who + '|' + text;
   if (!S.ttsCache.has(k)) {
@@ -686,6 +771,7 @@ async function fetchTTS(id, text) {
 }
 
 function playAudio(blob) {
+  stopCurrentAudio();                            // 同一时刻只允许一段声音
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const a = new Audio(url);
@@ -762,14 +848,18 @@ async function hostSay(text, opts = {}) {
   $('#deck-status').textContent = '主持人讲述中';
   $('#deck-narration').classList.add('speaking');
   if (canPlayAudio()) {
-    const wav = await warmTTS('host', text);
+    let wav = await warmTTS('host', text);
+    if (!wav) {                                  // 预热失败（多为上游限流）→ 就地重来一次
+      S.ttsCache.delete('host|' + text);
+      wav = await fetchHostTTS(text).catch(() => null);
+    }
     if (wav && !S.aborted && canPlayAudio()) await playAudio(wav);
     else await sleep(readTime(text) * 0.8);
   } else {
     await sleep(readTime(text) * 0.8);
   }
   $('#deck-narration').classList.remove('speaking');
-  if (!S.briefing && !S.reviewingDeck) $('#deck-status').textContent = S.escalated ? '议题升级' : '辩论进行中';
+  if (!S.briefing) $('#deck-status').textContent = S.escalated ? '议题升级' : '辩论进行中';
 }
 
 async function fetchHostTTS(text) {
@@ -793,7 +883,7 @@ async function userWindow(cueText, st) {
   openSpeechTray(true);
   for (let t = 15; t > 0; t--) {
     $('#cue-count').textContent = t;
-    if (S.pendingUser || S.cueSkip || S.aborted) break;
+    if (S.pendingUser || S.cueSkip || S.aborted || S.skipStory) break;
     if (S.inputHold && $('#user-input').value.trim()) { await sleep(1000); t++; continue; }  // 打字中不倒数
     await sleep(1000);
   }
@@ -831,6 +921,22 @@ function submitUser() {
   showThink(null, false);
   openSpeechTray(false, false);
   if (S.cueTarget) cuePhilosopher(S.cueTarget);
+}
+
+// 跳过当前这一位的发言（不打断流程，直接换下一位）
+function skipCurrentTurn() {
+  if (!S.running) return;
+  S.skipTurn = true;
+  stopCurrentAudio();
+}
+
+// 跳过本篇故事，直接进入下一篇
+function skipCurrentStory() {
+  if (!S.running) return;
+  S.skipStory = true;
+  S.skipBriefing = true;
+  stopCurrentAudio();
+  S.flowWaiters.splice(0).forEach((r) => r());
 }
 
 function doInterrupt() {
@@ -1024,6 +1130,7 @@ function pushLine(who, name, text) {
 // ═══ 结束 → 报告 ═══
 async function endMeeting() {
   S.aborted = true;
+  $('#screen-table').classList.remove('debating');
   stopCurrentAudio();
   stopBgm();
   S.flowWaiters.splice(0).forEach((r) => r());

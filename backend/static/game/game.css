@@ -435,3 +435,33 @@ button { font-family: var(--serif); cursor: pointer; }
   .deck-narrative { -webkit-line-clamp:3; }
   .speech-tray { min-height:126px; padding-top:25px; padding-bottom:28px; }
 }
+
+
+/* ═══ v3 增补：PPT 常驻翻页 / 主持人台词放大 / 跳过控件 ═══ */
+
+/* 幻灯片翻页条：箭头 + 页码点，放在纸面底部，永不遮挡正文 */
+.deck-pager { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.deck-page { width: 26px; height: 26px; border: 1px solid rgba(140,110,60,.5); border-radius: 7px;
+  background: rgba(255,251,240,.85); color: #6b5530; font-size: 17px; line-height: 1; padding: 0;
+  box-shadow: 0 1px 3px rgba(50,38,18,.16); transition: all .15s; }
+.deck-page:hover:not(:disabled) { background: #fff; border-color: #8a6a3a; }
+.deck-page:disabled { opacity: .3; cursor: default; }
+
+/* 主持人台词：从一行小字改成显眼的讲述条 */
+.deck-foot { align-items: flex-start; }
+.deck-narration { flex: 1; display: flex; align-items: flex-start; gap: 9px; min-width: 0;
+  background: linear-gradient(180deg, rgba(255,250,238,.96), rgba(246,238,220,.96));
+  border: 1px solid rgba(150,115,60,.5); border-left: 4px solid var(--terra);
+  border-radius: 10px; padding: 7px 13px; box-shadow: 0 2px 7px rgba(60,45,20,.16);
+  opacity: 0; transition: opacity .25s; }
+.deck-narration.speaking, .story-deck.briefing .deck-narration { opacity: 1; }
+.deck-narration > span { flex-shrink: 0; font-size: 12px; letter-spacing: 1px; color: #fff;
+  background: var(--terra); border-radius: 5px; padding: 2px 8px; margin-top: 1px; }
+.deck-narration b { font-weight: 400; font-size: 14.5px; line-height: 1.65; color: #33291a;
+  white-space: normal; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.deck-narration.speaking b { animation: hostpulse 1.6s ease-in-out infinite; }
+@keyframes hostpulse { 0%,100% { color: #33291a; } 50% { color: #7a4527; } }
+
+/* 跳过控件在辩论期才出现 */
+#btn-skip-turn, #btn-skip-story { display: none; }
+.debating #btn-skip-turn, .debating #btn-skip-story { display: inline-flex; }
