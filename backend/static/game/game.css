@@ -481,18 +481,21 @@ button { font-family: var(--serif); cursor: pointer; }
   padding: 0; font-size: 14px; background: transparent; border: 0; border-radius: 0; box-shadow: none; }
 
 /* 点名标签：像聊天软件的「@谁谁谁」，底色取角色本色（JS 写 inline background）*/
-.mention-chip { display: none; align-items: center; gap: 3px; flex-shrink: 0; max-width: 40%;
-  height: 26px; padding: 0 4px 0 9px; border-radius: 6px; color: #fff;
-  border: 1px solid rgba(255,255,255,.32);
-  /* 角色本色由 JS 写 background-color；这层渐变压深浅色角色，保证白字始终看得清 */
-  background-image: linear-gradient(180deg, rgba(255,255,255,.13), rgba(0,0,0,.3));
-  box-shadow: 0 1px 3px rgba(40,28,12,.3), inset 0 1px 0 rgba(255,255,255,.24); }
+.mention-chip { display: none; align-items: center; gap: 2px; flex-shrink: 0; max-width: 40%;
+  height: 26px; padding: 0 4px 0 8px; border-radius: 6px; color: #fff;
+  border: 1px solid rgba(255,255,255,.34);
+  /* 角色本色由 JS 写 background-color；这层渐变把浅色角色压深，白字才不糊进底色 */
+  background-image: linear-gradient(180deg, rgba(0,0,0,.14), rgba(0,0,0,.42));
+  box-shadow: 0 1px 3px rgba(40,28,12,.3), inset 0 1px 0 rgba(255,255,255,.22); }
 .mention-chip.on { display: inline-flex; animation: chippop .18s cubic-bezier(.2,1.5,.5,1); }
 @keyframes chippop { from { transform: scale(.8); opacity: 0; } }
-.mention-chip b { font-weight: 700; font-size: 13px; letter-spacing: 1px; white-space: nowrap;
-  overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 1px rgba(20,12,4,.35); }
+/* @ 与名字都用纯白、不加阴影：小字号下阴影会把笔画糊住 */
+.mention-chip em { font-style: normal; font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13.5px; font-weight: 700; color: #fff; }
+.mention-chip b { font-weight: 700; font-size: 13.5px; letter-spacing: 1px; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mention-chip i { font-style: normal; font-size: 9.5px; line-height: 1; padding: 4px; border-radius: 4px;
-  cursor: pointer; opacity: .62; transition: all .15s; }
+  color: #fff; cursor: pointer; opacity: .7; transition: all .15s; }
 .mention-chip i:hover { opacity: 1; background: rgba(255,255,255,.26); }
 
 /* 录音中：状态要显眼，起止全由玩家自己按 */
@@ -505,6 +508,12 @@ button { font-family: var(--serif); cursor: pointer; }
 .rec-badge b { font-weight: 700; font-variant-numeric: tabular-nums; }
 @keyframes recdot { from { opacity: .3; } to { opacity: 1; } }
 #btn-mic.rec { color: #ffd2be; }
+
+/* 发言闸门：导读 / 主持人讲述期间入口直接灰掉，别让人白打一段字才发现没人接 */
+.dock-control:disabled, .speak-primary:disabled { opacity: .4; filter: grayscale(.6); cursor: not-allowed; }
+.dock-control:disabled:hover, .speak-primary:disabled:hover { transform: none; filter: grayscale(.6); }
+.input-shell.off { opacity: .5; }
+#user-input:disabled { cursor: not-allowed; }
 
 /* 轮到你了：60 秒够说完一段话，跳过按钮做成实心，别让人以为只能干等 */
 .user-cue { padding-top: 58px; gap: 1px; }           /* 三行字都落在木牌上，不再压到吊绳 */

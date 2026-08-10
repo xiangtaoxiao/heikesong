@@ -98,7 +98,7 @@ const S = {
   panel: [], storyIdx: 0, escalated: false,
   transcript: [], storyTranscript: [], relationshipLedger: { recent: [] }, userLines: [],
   pendingUser: null, cueTarget: null,
-  interruptFlag: false, recording: false,
+  interruptFlag: false, recording: false, hostSpeaking: false,
   audioMuted: false,
   running: false, aborted: false, briefing: false, skipBriefing: false,
   paused: false, inputHold: false, flowWaiters: [], // 暂停/输入即停（移植）
@@ -175,6 +175,7 @@ async function boot() {
     openSpeechTray(false);
   });
   setupMic();
+  updateSpeakGate();                                 // 未开席前发言控件保持禁用
   window.addEventListener('resize', () => layoutChars(true));
   // 开场问候与选人无关：页面一加载就开始生成并合成语音，入席时零等待
   S.welcomeP = fetchWelcome().then((t) => { warmTTS('host', t); return t; });
@@ -186,6 +187,7 @@ async function boot() {
     S.panel = h.slice(7).split('&')[0].split(',').filter((x) => CAST[x] && x !== 'player');
     show('#screen-table');
     mountChars();
+    S.running = true; updateSpeakGate();             // 直达调试台也让发言控件可用
     const st = STORIES[0];
     const meta = STORY_META.stories[0];
     setTheater(st, meta);
@@ -238,6 +240,24 @@ function renderStorySummary() {
   list.innerHTML = `<span class="ss-label">今晚三篇</span>${STORIES.map((story, index) =>
     `<span class="ss-item"><em>${index + 1}.</em> ${story.title}<i>${story.source.replace(/[《》]/g, '')}</i></span>`
   ).join('')}`;
+}
+
+// ═══ 发言闸门 ═══
+// 主持人讲述与导读期是他的场子，玩家不该插话——这时把发言入口直接禁掉，
+// 而不是让他打完字才发现没人接。打断正在发言的哲学家仍然允许，那是本作的核心机制。
+function canUserSpeak() {
+  return S.running && !S.aborted && !S.briefing && !S.hostSpeaking;
+}
+
+function updateSpeakGate() {
+  const off = !canUserSpeak();
+  [$('#btn-speak-open'), $('#btn-send'), $('#btn-mic'), $('#btn-interrupt'), $('#user-input')]
+    .forEach((el) => { if (el) el.disabled = off; });
+  $('#input-shell')?.classList.toggle('off', off);
+  const small = $('#btn-speak-open')?.querySelector('small');
+  if (small) small.textContent = !off ? '文字或语音'
+    : S.briefing ? '导读中' : S.hostSpeaking ? '主持人讲述中' : '尚未开席';
+  if (off) openSpeechTray(false, false);             // 顺带收麦、收托盘
 }
 
 // 发言区采用二级托盘：常态收起以节省舞台高度，用户主动发言或被 cue 时展开。
@@ -378,6 +398,7 @@ function mountChars() {
 }
 
 function cuePhilosopher(id) {
+  if (!canUserSpeak()) return;                       // 这会儿不能发言，点名也就无从谈起
   S.cueTarget = S.cueTarget === id ? null : id;
   Object.entries(S.chars).forEach(([pid, c]) => c.el.classList.toggle('cued', pid === S.cueTarget));
   renderMentionChip();
@@ -391,7 +412,7 @@ function renderMentionChip() {
   const inp = $('#user-input');
   chip.classList.toggle('on', !!S.cueTarget);
   if (S.cueTarget) {
-    $('#mention-name').textContent = '@' + CAST[S.cueTarget].name;
+    $('#mention-name').textContent = CAST[S.cueTarget].name;   // 「@」是标签里独立的一格
     chip.style.backgroundColor = CAST[S.cueTarget].color;   // 只改底色，CSS 那层压深的渐变还要留着
     inp.placeholder = '想问他什么…';
   } else {
@@ -408,6 +429,7 @@ async function startGame() {
   S.aborted = false; S.paused = false; S.inputHold = false; S.running = true;
   $('#btn-pause').classList.remove('paused');
   openSpeechTray(false, false);
+  updateSpeakGate();
   show('#screen-table');
   mountChars();
   startBgm();
@@ -546,6 +568,7 @@ async function runStoryBriefing(st, meta) {
   const beats = deckBeats(st, meta);
   S.briefing = true;
   S.skipBriefing = false;
+  updateSpeakGate();                                  // 导读是主持人的场子，先关掉发言入口
   Object.keys(S.chars).forEach(stopIdle);             // 导读期人物静止（首帧）
   Object.values(S.chars).forEach((c) => setFrame(c.el.querySelector('.sprite'), 0));
   $('#story-deck').classList.add('briefing');
@@ -560,6 +583,7 @@ async function runStoryBriefing(st, meta) {
   }
   showDeckSlide(beats, beats.length - 1);         // 收在议题页
   S.briefing = false;
+  updateSpeakGate();                              // 开席，发言入口解禁
   enterDebateDeck(st, meta);
 }
 
@@ -944,21 +968,28 @@ async function typewriterWait(text) {
 async function hostSay(text, opts = {}) {
   if (S.aborted) return;
   await waitForFlow();
+  S.hostSpeaking = true;
+  updateSpeakGate();                             // 他讲话期间，玩家的发言入口一律禁掉
   pushLine('host', '主持人', text);
   $('#deck-narration-name').textContent = '主持人';
   $('#deck-narration-text').textContent = text;
   $('#deck-status').textContent = '主持人讲述中';
   $('#deck-narration').classList.add('speaking');
-  if (canPlayAudio()) {
-    let wav = await warmTTS('host', text);
-    if (!wav) {                                  // 预热失败（多为上游限流）→ 就地重来一次
-      S.ttsCache.delete('host|' + text);
-      wav = await fetchHostTTS(text).catch(() => null);
+  try {
+    if (canPlayAudio()) {
+      let wav = await warmTTS('host', text);
+      if (!wav) {                                // 预热失败（多为上游限流）→ 就地重来一次
+        S.ttsCache.delete('host|' + text);
+        wav = await fetchHostTTS(text).catch(() => null);
+      }
+      if (wav && !S.aborted && canPlayAudio()) await playAudio(wav);
+      else await sleep(readTime(text) * 0.8);
+    } else {
+      await sleep(readTime(text) * 0.8);
     }
-    if (wav && !S.aborted && canPlayAudio()) await playAudio(wav);
-    else await sleep(readTime(text) * 0.8);
-  } else {
-    await sleep(readTime(text) * 0.8);
+  } finally {                                    // 播放出错也必须把闸门放开，否则整局都发不了言
+    S.hostSpeaking = false;
+    updateSpeakGate();
   }
   $('#deck-narration').classList.remove('speaking');
   if (!S.briefing) $('#deck-status').textContent = S.escalated ? '议题升级' : '辩论进行中';
@@ -1293,6 +1324,7 @@ function pushLine(who, name, text) {
 // ═══ 结束 → 报告 ═══
 async function endMeeting() {
   S.aborted = true;
+  updateSpeakGate();
   $('#screen-table').classList.remove('debating');
   stopCurrentAudio();
   stopBgm();
@@ -1302,6 +1334,7 @@ async function endMeeting() {
 
 async function showReport() {
   S.running = false;
+  updateSpeakGate();
   stopBgm();
   show('#screen-report');
   const wrap = $('#report-wrap');
