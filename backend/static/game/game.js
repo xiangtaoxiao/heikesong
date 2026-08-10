@@ -41,6 +41,7 @@ const SEAT_QUOTES = {
   diogenes: '请别挡住我的阳光。',
 };
 const FRAMES = 15;                                   // 雪碧图 15帧 5×3，乒乓循环
+const CUE_SECONDS = 60;                              // 轮到玩家时给他多久（打字或录音期间不倒数）
 const SPRITE = (id, ver) => `/static/assets/sprites/${id}-${ver || 'a'}.png`;
 const randVer = () => (Math.random() < 0.5 ? 'a' : 'b');
 function setSpriteVer(id, ver) {
@@ -97,7 +98,7 @@ const S = {
   panel: [], storyIdx: 0, escalated: false,
   transcript: [], storyTranscript: [], relationshipLedger: { recent: [] }, userLines: [],
   pendingUser: null, cueTarget: null,
-  interruptFlag: false,
+  interruptFlag: false, recording: false, hostSpeaking: false,
   audioMuted: false,
   running: false, aborted: false, briefing: false, skipBriefing: false,
   paused: false, inputHold: false, flowWaiters: [], // 暂停/输入即停（移植）
@@ -133,10 +134,15 @@ async function boot() {
   $('#btn-start-game').onclick = startGame;
   $('#btn-send').onclick = submitUser;
   const inp = $('#user-input');
-  inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') submitUser(); });
-  inp.addEventListener('focus', holdFlowForInput);
-  inp.addEventListener('blur', releaseFlowOnBlur);
+  inp.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitUser();
+    // 空输入框按退格：像聊天软件那样先删掉 @ 标签
+    if (e.key === 'Backspace' && !inp.value && S.cueTarget) cuePhilosopher(S.cueTarget);
+  });
+  inp.addEventListener('focus', () => { $('#input-shell').classList.add('focused'); holdFlowForInput(); });
+  inp.addEventListener('blur', () => { $('#input-shell').classList.remove('focused'); releaseFlowOnBlur(); });
   inp.addEventListener('input', () => { if (inp.value.trim()) holdFlowForInput(); });
+  $('#mention-clear').onclick = () => { if (S.cueTarget) cuePhilosopher(S.cueTarget); };
   $('#btn-interrupt').onclick = doInterrupt;
   $('#btn-log').onclick = () => $('#drawer').classList.add('open');
   $('#btn-drawer-close').onclick = () => $('#drawer').classList.remove('open');
@@ -169,6 +175,7 @@ async function boot() {
     openSpeechTray(false);
   });
   setupMic();
+  updateSpeakGate();                                 // 未开席前发言控件保持禁用
   window.addEventListener('resize', () => layoutChars(true));
   // 开场问候与选人无关：页面一加载就开始生成并合成语音，入席时零等待
   S.welcomeP = fetchWelcome().then((t) => { warmTTS('host', t); return t; });
@@ -180,6 +187,7 @@ async function boot() {
     S.panel = h.slice(7).split('&')[0].split(',').filter((x) => CAST[x] && x !== 'player');
     show('#screen-table');
     mountChars();
+    S.running = true; updateSpeakGate();             // 直达调试台也让发言控件可用
     const st = STORIES[0];
     const meta = STORY_META.stories[0];
     setTheater(st, meta);
@@ -234,10 +242,29 @@ function renderStorySummary() {
   ).join('')}`;
 }
 
+// ═══ 发言闸门 ═══
+// 主持人讲述与导读期是他的场子，玩家不该插话——这时把发言入口直接禁掉，
+// 而不是让他打完字才发现没人接。打断正在发言的哲学家仍然允许，那是本作的核心机制。
+function canUserSpeak() {
+  return S.running && !S.aborted && !S.briefing && !S.hostSpeaking;
+}
+
+function updateSpeakGate() {
+  const off = !canUserSpeak();
+  [$('#btn-speak-open'), $('#btn-send'), $('#btn-mic'), $('#btn-interrupt'), $('#user-input')]
+    .forEach((el) => { if (el) el.disabled = off; });
+  $('#input-shell')?.classList.toggle('off', off);
+  const small = $('#btn-speak-open')?.querySelector('small');
+  if (small) small.textContent = !off ? '文字或语音'
+    : S.briefing ? '导读中' : S.hostSpeaking ? '主持人讲述中' : '尚未开席';
+  if (off) openSpeechTray(false, false);             // 顺带收麦、收托盘
+}
+
 // 发言区采用二级托盘：常态收起以节省舞台高度，用户主动发言或被 cue 时展开。
 function openSpeechTray(open = true, focus = true) {
   const table = $('#screen-table');
   if (!table) return;
+  if (!open && S.recording) micStop(false);           // 托盘收起就别在暗处继续录
   table.classList.toggle('speech-open', open);
   $('#speech-tray').setAttribute('aria-hidden', String(!open));
   $('#btn-speak-open').setAttribute('aria-expanded', String(open));
@@ -371,13 +398,26 @@ function mountChars() {
 }
 
 function cuePhilosopher(id) {
+  if (!canUserSpeak()) return;                       // 这会儿不能发言，点名也就无从谈起
   S.cueTarget = S.cueTarget === id ? null : id;
   Object.entries(S.chars).forEach(([pid, c]) => c.el.classList.toggle('cued', pid === S.cueTarget));
-  $('#user-input').placeholder = S.cueTarget
-    ? `对${CAST[S.cueTarget].name}说…（再点一次取消点名）`
-    : '随时插话；点击哲学家可点名提问…';
+  renderMentionChip();
   if (S.cueTarget) $('#user-input').focus();
   if (S.cueTarget) openSpeechTray(true);
+}
+
+// 点名做成聊天软件里的「@某人」标签：带角色本色底色，✕ 可直接取消
+function renderMentionChip() {
+  const chip = $('#mention-chip');
+  const inp = $('#user-input');
+  chip.classList.toggle('on', !!S.cueTarget);
+  if (S.cueTarget) {
+    $('#mention-name').textContent = CAST[S.cueTarget].name;   // 「@」是标签里独立的一格
+    chip.style.backgroundColor = CAST[S.cueTarget].color;   // 只改底色，CSS 那层压深的渐变还要留着
+    inp.placeholder = '想问他什么…';
+  } else {
+    inp.placeholder = '说出你的想法；点击哲学家可点名提问…';
+  }
 }
 
 // ═══ 主流程 ═══
@@ -389,6 +429,7 @@ async function startGame() {
   S.aborted = false; S.paused = false; S.inputHold = false; S.running = true;
   $('#btn-pause').classList.remove('paused');
   openSpeechTray(false, false);
+  updateSpeakGate();
   show('#screen-table');
   mountChars();
   startBgm();
@@ -527,6 +568,7 @@ async function runStoryBriefing(st, meta) {
   const beats = deckBeats(st, meta);
   S.briefing = true;
   S.skipBriefing = false;
+  updateSpeakGate();                                  // 导读是主持人的场子，先关掉发言入口
   Object.keys(S.chars).forEach(stopIdle);             // 导读期人物静止（首帧）
   Object.values(S.chars).forEach((c) => setFrame(c.el.querySelector('.sprite'), 0));
   $('#story-deck').classList.add('briefing');
@@ -541,6 +583,7 @@ async function runStoryBriefing(st, meta) {
   }
   showDeckSlide(beats, beats.length - 1);         // 收在议题页
   S.briefing = false;
+  updateSpeakGate();                              // 开席，发言入口解禁
   enterDebateDeck(st, meta);
 }
 
@@ -925,21 +968,28 @@ async function typewriterWait(text) {
 async function hostSay(text, opts = {}) {
   if (S.aborted) return;
   await waitForFlow();
+  S.hostSpeaking = true;
+  updateSpeakGate();                             // 他讲话期间，玩家的发言入口一律禁掉
   pushLine('host', '主持人', text);
   $('#deck-narration-name').textContent = '主持人';
   $('#deck-narration-text').textContent = text;
   $('#deck-status').textContent = '主持人讲述中';
   $('#deck-narration').classList.add('speaking');
-  if (canPlayAudio()) {
-    let wav = await warmTTS('host', text);
-    if (!wav) {                                  // 预热失败（多为上游限流）→ 就地重来一次
-      S.ttsCache.delete('host|' + text);
-      wav = await fetchHostTTS(text).catch(() => null);
+  try {
+    if (canPlayAudio()) {
+      let wav = await warmTTS('host', text);
+      if (!wav) {                                // 预热失败（多为上游限流）→ 就地重来一次
+        S.ttsCache.delete('host|' + text);
+        wav = await fetchHostTTS(text).catch(() => null);
+      }
+      if (wav && !S.aborted && canPlayAudio()) await playAudio(wav);
+      else await sleep(readTime(text) * 0.8);
+    } else {
+      await sleep(readTime(text) * 0.8);
     }
-    if (wav && !S.aborted && canPlayAudio()) await playAudio(wav);
-    else await sleep(readTime(text) * 0.8);
-  } else {
-    await sleep(readTime(text) * 0.8);
+  } finally {                                    // 播放出错也必须把闸门放开，否则整局都发不了言
+    S.hostSpeaking = false;
+    updateSpeakGate();
   }
   $('#deck-narration').classList.remove('speaking');
   if (!S.briefing) $('#deck-status').textContent = S.escalated ? '议题升级' : '辩论进行中';
@@ -966,14 +1016,15 @@ async function userWindow(cueText, st) {
   cueEl.classList.add('on');
   S.cueSkip = false;
   openSpeechTray(true);
-  for (let t = 15; t > 0; t--) {
-    $('#cue-count').textContent = t;
+  for (let t = CUE_SECONDS; t > 0; t--) {
+    $('#cue-count').textContent = t + ' 秒';
     if (S.pendingUser || S.cueSkip || S.aborted || S.skipStory) break;
-    if (S.inputHold && $('#user-input').value.trim()) { await sleep(1000); t++; continue; }  // 打字中不倒数
+    // 打字中或正在录音都不倒数——不能催着玩家把话说完
+    if (S.recording || (S.inputHold && $('#user-input').value.trim())) { await sleep(1000); t++; continue; }
     await sleep(1000);
   }
   cueEl.classList.remove('on');
-  if (!S.pendingUser && !$('#user-input').value.trim()) openSpeechTray(false, false);
+  if (!S.pendingUser && !S.recording && !$('#user-input').value.trim()) openSpeechTray(false, false);
   await drainUser(st, 0);
 }
 
@@ -989,6 +1040,7 @@ function positionCue() {
 // ═══ 插话（立即截停当前发言，移植自协作版）═══
 function submitUser() {
   const inp = $('#user-input');
+  micStop(false);                                     // 录音中直接发送：先收麦，尾巴上的识别结果丢掉
   const text = inp.value.trim();
   if (!text || !S.running) return;
   inp.value = '';
@@ -1098,25 +1150,82 @@ async function refreshSuggestions(st, phase = 'source', hostQuestion = '') {
   }
 }
 
-// ═══ 语音输入 ═══
+// ═══ 语音输入：起止由玩家自己按，句中停顿不再被当成说完 ═══
+let micStop = () => {};                              // setupMic 里赋真身；供提交/收起托盘时调用
+
 function setupMic() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   const btn = $('#btn-mic');
+  const label = $('#mic-label');
+  const inp = $('#user-input');
   if (!SR) { btn.title = '此浏览器不支持语音识别，请用 Chrome'; btn.style.opacity = .4; return; }
   const rec = new SR();
-  rec.lang = 'zh-CN'; rec.interimResults = true; rec.continuous = false;
-  let on = false;
+  rec.lang = 'zh-CN'; rec.interimResults = true; rec.continuous = true;   // 停顿不结束
+  let settled = '';                                  // 已定稿文本；中间结果只作预览，不覆盖
+  let live = false;                                  // 识别结果是否还该写进输入框
+  let finalUpto = 0;                                 // 本次识别会话已吃进 settled 的定稿条数，防重复累加
+  let timer = null, elapsed = 0;
+
+  const paint = (on) => {
+    S.recording = on;
+    btn.classList.toggle('rec', on);
+    label.textContent = on ? '结束' : '语音';
+    btn.title = on ? '点「结束」停止录音，改完再自己按发送' : '语音发言（点一下开始，说完点结束）';
+    $('#rec-badge').classList.toggle('on', on);
+    if (on) inp.placeholder = '正在听…说完点「结束」';
+    else renderMentionChip();                        // 顺带把 placeholder 还原
+  };
+
+  const start = () => {
+    settled = inp.value;                             // 已经打了字就接着往后加
+    live = true; elapsed = 0;
+    $('#rec-time').textContent = '0:00';
+    paint(true);
+    holdFlowForInput();                              // 录音期间流程暂停，话头不会被抢走
+    try { rec.start(); } catch {}
+    clearInterval(timer);
+    timer = setInterval(() => {
+      elapsed++;
+      $('#rec-time').textContent = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
+    }, 1000);
+  };
+
+  // keep=false 用于提交时收尾：丢掉尾巴上迟到的识别结果，别写回已清空的输入框
+  const stop = (keep = true) => {
+    if (!S.recording) return;
+    live = keep;
+    paint(false);
+    clearInterval(timer);
+    try { rec.stop(); } catch {}
+    if (keep) inp.focus();                           // 停下来先给玩家改词的机会，发不发由他定
+  };
+  micStop = stop;
+
+  rec.onstart = () => { finalUpto = 0; };            // 每段识别会话（含续录）的下标都从 0 重新数
   rec.onresult = (e) => {
-    const t = [...e.results].map((r) => r[0].transcript).join('');
-    $('#user-input').value = t;
+    if (!live) return;
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (!r.isFinal) { interim += r[0].transcript; continue; }
+      if (i < finalUpto) continue;                   // 同一句定稿只收一次
+      settled += r[0].transcript;
+      finalUpto = i + 1;
+    }
+    inp.value = settled + interim;
     holdFlowForInput();
   };
-  rec.onend = () => { btn.classList.remove('rec'); on = false; if ($('#user-input').value.trim()) submitUser(); };
-  btn.onclick = () => {
-    if (on) { rec.stop(); return; }
-    on = true; btn.classList.add('rec'); $('#user-input').value = '';
-    try { rec.start(); } catch {}
+  // 浏览器仍会因静音自行结束；只要玩家还没点「结束」，就无声续录
+  rec.onend = () => { if (S.recording) { try { rec.start(); } catch { paint(false); clearInterval(timer); } } };
+  rec.onerror = (e) => {
+    if (e.error === 'no-speech' || e.error === 'aborted') return;         // 交给 onend 续录
+    paint(false);
+    clearInterval(timer);
+    showSystemNotice(e.error === 'not-allowed'
+      ? '麦克风未授权——请在地址栏允许麦克风后重试，或直接打字'
+      : '语音识别出错了，这一句请改用打字');
   };
+  btn.onclick = () => (S.recording ? stop() : start());
 }
 
 // ═══ 舞台表现 ═══
@@ -1215,6 +1324,7 @@ function pushLine(who, name, text) {
 // ═══ 结束 → 报告 ═══
 async function endMeeting() {
   S.aborted = true;
+  updateSpeakGate();
   $('#screen-table').classList.remove('debating');
   stopCurrentAudio();
   stopBgm();
@@ -1224,6 +1334,7 @@ async function endMeeting() {
 
 async function showReport() {
   S.running = false;
+  updateSpeakGate();
   stopBgm();
   show('#screen-report');
   const wrap = $('#report-wrap');
