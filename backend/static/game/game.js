@@ -139,7 +139,8 @@ async function boot() {
   inp.addEventListener('focus', () => { $('#input-shell').classList.add('focused'); holdFlowForInput(); });
   inp.addEventListener('blur', () => { $('#input-shell').classList.remove('focused'); releaseFlowOnBlur(); });
   inp.addEventListener('input', () => { if (inp.value.trim()) holdFlowForInput(); });
-  $('#mention-clear').onclick = () => { if (S.cueTarget) cuePhilosopher(S.cueTarget); };
+  const mentionClear = $('#mention-clear');
+  if (mentionClear) mentionClear.onclick = () => { if (S.cueTarget) cuePhilosopher(S.cueTarget); };
   $('#btn-interrupt').onclick = doInterrupt;
   $('#btn-log').onclick = () => $('#drawer').classList.add('open');
   $('#btn-drawer-close').onclick = () => $('#drawer').classList.remove('open');

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>孔子邀请你加入会议：快来跟古今中外圣贤开麦，选出你的哲学人格</title>
-<link rel="stylesheet" href="/static/game/game.css?v=20260810-report-share4">
+<link rel="stylesheet" href="/static/game/game.css?v=20260810-report-share5">
 </head>
 <body>
 
@@ -103,8 +103,12 @@
     <div class="speech-tray" id="speech-tray" aria-hidden="true">
       <div class="suggestion-list" id="suggestion-list" aria-label="推荐发言"></div>
       <div class="utterance-box">
-        <button class="dock-control mic" id="btn-mic" title="语音发言（按一下开始/结束）"><span class="control-signet">语音</span></button>
-        <input id="user-input" type="text" maxlength="120" placeholder="说出你的想法；点击哲学家可点名提问…" autocomplete="off">
+        <button class="dock-control mic" id="btn-mic" title="语音发言（点一下开始，说完点结束）"><span class="control-signet" id="mic-label">语音</span></button>
+        <div class="input-shell" id="input-shell">
+          <span class="rec-badge" id="rec-badge">录音中<b id="rec-time">0:00</b></span>
+          <span class="mention-chip" id="mention-chip"><em>@</em><b id="mention-name"></b><i id="mention-clear" title="取消点名">✕</i></span>
+          <input id="user-input" type="text" maxlength="120" placeholder="说出你的想法；点击哲学家可点名提问…" autocomplete="off">
+        </div>
         <button class="dock-control btn-send" id="btn-send">发送</button>
         <button class="dock-control btn-interrupt" id="btn-interrupt">打断</button>
         <button class="tray-close" id="btn-speech-close" title="收起发言区">收起</button>
@@ -158,6 +162,6 @@
   </div>
 </section>
 
-<script src="/static/game/game.js?v=20260810-report-share4"></script>
+<script src="/static/game/game.js?v=20260810-report-share5"></script>
 </body>
 </html>
