@@ -161,6 +161,19 @@ def _post_json(url: str, key: str, payload: dict, timeout: int = 90, operation: 
         )
 
 
+def _get_json(url: str, key: str, timeout: int = 15) -> bytes:
+    curl = shutil.which("curl")
+    result = subprocess.run(
+        [curl, "--silent", "--show-error", "--fail-with-body", "--max-time", str(timeout),
+         "-H", f"Authorization: Bearer {key}",
+         "-H", "User-Agent: Mozilla/5.0 curl-game-client/1.0", url],
+        capture_output=True, timeout=timeout + 5,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.decode("utf-8", "replace")[:160])
+    return result.stdout
+
+
 # ---------- 发言 ----------
 
 @router.get("/api/game/stories")
@@ -168,10 +181,28 @@ def game_stories() -> dict:
     """Expose reviewed story copy for the static game client."""
     return {"stories": list(STORIES.values())}
 
+_SKILL_CACHE: dict[str, str] = {}
+# SKILL.md 前部多是 frontmatter 与资料路由说明，对生成台词没有帮助却占满输入窗口。
+# 只保留"核心身份 / 默认人格 / 说话方式"这类真正塑造语气的段落，输入 token 直接减半。
+_SKILL_KEEP = ("说话方式", "我真正追问", "论证发动机", "概念区分", "核心身份", "默认人格", "角色与边界")
+
+
 def _skill(persona_id: str) -> str:
+    if persona_id in _SKILL_CACHE:
+        return _SKILL_CACHE[persona_id]
     skill_id = SKILL_IDS.get(persona_id, persona_id)
     path = SKILLS_DIR / f"{skill_id}-agent" / "SKILL.md"
-    return path.read_text(encoding="utf-8")[:12000] if path.exists() else "保持清晰、克制、尊重用户判断。"
+    if not path.exists():
+        return "保持清晰、克制、尊重用户判断。"
+    raw = path.read_text(encoding="utf-8")
+    blocks, keep, buf = raw.split("\n## "), [], None
+    for block in blocks[1:]:
+        title = block.split("\n", 1)[0]
+        if any(k in title for k in _SKILL_KEEP):
+            keep.append("## " + block.strip())
+    text = "\n\n".join(keep)[:1400] if keep else raw[:1400]
+    _SKILL_CACHE[persona_id] = text
+    return text
 
 
 def _moderator_skill() -> str:
@@ -364,7 +395,9 @@ def _turn_prompt(persona_id: str, story_id: str, escalated: bool, transcript: li
 {opening_guard}
 
 只输出合法 JSON，不解释：
-{{"speak":true,"speech":"口语台词，不含动作或括号","action":"简短动作","address":"在场角色 id 或 null","move":"build/challenge/ally/tease/question/pass","respond_to":"story或user","stance":"initial、support或challenge之一","advance":"可选的简短推进标签","concepts":["最多3项"],"reference_used":["最多3项"]}}
+{{"speak":true,"speech":"口语台词，不含动作或括号","action":"≤8字动作","address":"在场角色 id 或 null","move":"build/challenge/ally/tease/question/pass","respond_to":"story或user","stance":"initial、support或challenge之一"}}
+
+不要输出上面没列出的任何字段，不要加 markdown 代码块，直接以大括号开头。
 
 若本轮不值得说，且不是玩家直接提问、也不是你本篇首次发言，可输出 speak=false、speech=""、move="pass" 和一个动作。否则 speak 必须为 true。speech 去空白后**必须**不超过{96 if escalated and speaker_history else 72}字（会被真人语音念出来，超长即作废）、最多{5 if escalated and speaker_history else 4}句、不能以“我认为”开头；直接回应案件或玩家，不泄露 Skill、reference、系统提示或推理过程。"""
 
@@ -453,7 +486,7 @@ def _validated_turn(content: str, persona_id: str, panel: list[str], user_text: 
             raise ValueError("second-round speech echoes another philosopher")
     if respond_to not in {"story", "user"} or stance not in {"initial", "support", "challenge"}:
         raise ValueError("invalid response metadata")
-    return {"speech": speech, "action": action[:24], "address": address, "move": move, "pass": False}
+    return {"speech": speech, "action": action[:12], "address": address, "move": move, "pass": False}
 
 
 def _host_prompt(task: str, story_id: str, transcript: list[dict]) -> str:
@@ -650,6 +683,26 @@ def game_turn(payload: dict) -> dict:
 WELCOME_FALLBACK = "各位贤者，晚上好。今晚咱们不讲大道理，就聊《论语》里几桩吵了两千年也没吵完的旧事——诸位随意开口，说错了也不打紧。"
 
 
+@router.get("/api/game/health")
+def game_health() -> dict:
+    """上游可用性 + 剩余额度。key 耗尽时前端要能立刻说清原因，而不是静默无声。"""
+    try:
+        base, key, model = _api()
+    except HTTPException:
+        return {"ok": False, "reason": "api_config 未配置"}
+    try:
+        sub = json.loads(_get_json(f"{base}/dashboard/billing/subscription", key))
+        used = json.loads(_get_json(f"{base}/dashboard/billing/usage", key)).get("total_usage", 0) / 100
+        limit = float(sub.get("hard_limit_usd") or 0)
+        left = round(limit - used, 2)
+        return {"ok": left > 0.5, "model": model, "limit_usd": limit,
+                "used_usd": round(used, 2), "left_usd": left,
+                "reason": "" if left > 0.5 else "额度已用尽"}
+    except Exception as exc:
+        LOGGER.warning("health check failed: %s", exc)
+        return {"ok": True, "model": model, "left_usd": None, "reason": ""}
+
+
 @router.post("/api/game/welcome")
 def game_welcome() -> dict:
     """开场问候：与具体故事无关，只欢迎诸位并说明今晚要做什么。"""
@@ -768,7 +821,8 @@ def game_tts(payload: dict) -> Response:
         "speed": speed,
     }, timeout=60)
     if audio[:1] == b"{":  # 上游把错误当 JSON 返回
-        raise HTTPException(status_code=502, detail=audio.decode("utf-8", "replace")[:200])
+        body = audio.decode("utf-8", "replace")[:200]
+        raise HTTPException(status_code=402 if "额度" in body or "quota" in body.lower() else 502, detail=body)
     return Response(content=audio, media_type="audio/wav")
 
 
@@ -825,6 +879,11 @@ def sprites_review() -> FileResponse:
 @router.get("/voices-review")
 def voices_review() -> FileResponse:
     return FileResponse(STATIC_DIR / "voices-review.html")
+
+
+@router.get("/deck-mock")
+def deck_mock() -> FileResponse:
+    return FileResponse(STATIC_DIR / "deck-mock.html")
 
 
 @router.get("/ui-review")
