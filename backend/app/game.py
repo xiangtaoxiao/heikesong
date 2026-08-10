@@ -847,6 +847,11 @@ def voices_review() -> FileResponse:
     return FileResponse(STATIC_DIR / "voices-review.html")
 
 
+@router.get("/deck-mock")
+def deck_mock() -> FileResponse:
+    return FileResponse(STATIC_DIR / "deck-mock.html")
+
+
 @router.get("/ui-review")
 def ui_review() -> FileResponse:
     return FileResponse(STATIC_DIR / "gpt2-ui-review.html")

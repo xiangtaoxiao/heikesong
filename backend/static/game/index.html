@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>稷下 · 论语圆桌</title>
-<link rel="stylesheet" href="/static/game/game.css?v=20260810-deck5">
+<link rel="stylesheet" href="/static/game/game.css?v=20260810-deckB4">
 </head>
 <body>
 
@@ -53,33 +53,44 @@
       <img class="deck-frame" src="/static/assets/ui/gpt2/scroll-frame.png" alt="">
       <div class="deck-paper">
         <div class="deck-head">
-          <span class="deck-phase" id="deck-phase">故事导读</span>
           <span class="deck-status" id="deck-status">主持人讲述中</span>
           <span class="deck-head-ctas">
             <button class="deck-cta" id="btn-original-deck">原文</button>
             <button class="deck-cta" id="btn-skip-brief">跳过导读</button>
           </span>
         </div>
-        <div class="deck-content">
+
+        <div class="deck-body">
+          <!-- 左：竖排标题 + 朱印 + 竖排出处 -->
+          <aside class="deck-side">
+            <h2 class="deck-title-v" id="deck-title"></h2>
+            <img class="deck-seal" src="/static/assets/ui/seal-stamp.png" alt="">
+            <div class="deck-source-v" id="deck-source"></div>
+          </aside>
+
+          <!-- 中：配图（第四页无图时收起） -->
           <div class="deck-visual" id="deck-visual" title="点击放大查看">
             <img id="deck-img" alt="故事插画">
             <span class="zoom-hint">点击放大</span>
           </div>
+
+          <!-- 右：正文 -->
           <div class="deck-copy">
-            <div class="deck-source" id="deck-source"></div>
-            <h2 id="deck-title"></h2>
             <p class="deck-narrative" id="deck-narrative"></p>
           </div>
         </div>
-        <div class="deck-foot">
-          <div class="deck-pager">
-            <button class="deck-page" id="btn-deck-prev" title="上一页（←）">‹</button>
-            <div class="deck-dots" id="deck-dots"><i></i><i></i><i></i></div>
-            <button class="deck-page" id="btn-deck-next" title="下一页（→）">›</button>
-          </div>
-          <div class="deck-narration" id="deck-narration">
-            <span id="deck-narration-name">主持人</span><b id="deck-narration-text"></b>
-          </div>
+
+        <!-- 翻页条：居中 -->
+        <div class="deck-pager">
+          <button class="deck-page" id="btn-deck-prev" title="上一页（←）">‹</button>
+          <span class="deck-pageno" id="deck-phase">1 / 4</span>
+          <div class="deck-dots" id="deck-dots"><i></i><i></i><i></i><i></i></div>
+          <button class="deck-page" id="btn-deck-next" title="下一页（→）">›</button>
+        </div>
+
+        <!-- 底：主持人讲述条，通栏 -->
+        <div class="deck-narration" id="deck-narration">
+          <span id="deck-narration-name">主持人</span><b id="deck-narration-text"></b>
         </div>
       </div>
     </section>
@@ -152,6 +163,6 @@
   </div>
 </section>
 
-<script src="/static/game/game.js?v=20260810-deck5"></script>
+<script src="/static/game/game.js?v=20260810-deckB4"></script>
 </body>
 </html>

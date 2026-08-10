@@ -480,19 +480,26 @@ async function afterStory(st) {
 function panelSrc(st, index) { return `/static/assets/theater/${st.id}-${index + 1}.png`; }
 
 function deckBeats(st, meta) {
-  if (meta.guide_slides?.length) {
-    return meta.guide_slides.map((slide, i) => ({
-      title: slide.title,
-      caption: [slide.text, slide.quote].filter(Boolean).join(' '),
-      narration: slide.narration || slide.text,
-      img: panelSrc(st, i),
-    }));
-  }
-  return (meta.briefing?.length ? meta.briefing : [
-    { title: st.title, narration: meta.scene },
-    { title: '原文线索', narration: meta.original_note },
-    { title: '开席之问', narration: meta.host_intro },
-  ]).map((b, i) => ({ ...b, img: panelSrc(st, i) }));
+  const slides = meta.guide_slides?.length
+    ? meta.guide_slides.map((slide, i) => ({
+        title: slide.title,
+        caption: [slide.text, slide.quote].filter(Boolean).join(' '),
+        narration: slide.narration || slide.text,
+        img: panelSrc(st, i),
+      }))
+    : (meta.briefing?.length ? meta.briefing : [
+        { title: st.title, narration: meta.scene },
+        { title: '原文线索', narration: meta.original_note },
+        { title: '开席之问', narration: meta.host_intro },
+      ]).map((b, i) => ({ ...b, img: panelSrc(st, i) }));
+  // 第四页：无配图，只摆出要辩的议题——主持人讲到这里就开席
+  return [...slides, {
+    title: '本篇议题',
+    caption: st.focal,
+    narration: meta.host_intro,
+    img: null,
+    topic: true,
+  }];
 }
 
 function setTheater(st, meta) {
@@ -501,7 +508,7 @@ function setTheater(st, meta) {
   $('#orig-text').textContent = meta.original;
   $('#orig-note').textContent = meta.original_note;
   [0, 1, 2].forEach((i) => { new Image().src = panelSrc(st, i); });   // 预载分格，翻页不闪
-  $('#deck-source').textContent = st.source;
+  S.deckSource = st.source;
 }
 
 async function showStoryTransition(nextStory) {
@@ -523,10 +530,12 @@ async function runStoryBriefing(st, meta) {
   renderDeckDots(beats.length);
   for (let i = 0; i < beats.length && !S.aborted && !S.skipStory; i++) {
     await waitForFlow();
-    showDeckSlide(beats, i);
+    showDeckSlide(beats, i);                      // 主持人讲到哪一页，翻页条就自动走到哪一页
     await hostSay(beats[i].narration, { inDeck: true });
     if (S.skipBriefing) break;
+    if (i < beats.length - 1) await sleep(320);   // 翻页之间留一口气
   }
+  showDeckSlide(beats, beats.length - 1);         // 收在议题页
   S.briefing = false;
   enterDebateDeck(st, meta);
 }
@@ -553,9 +562,11 @@ function renderDeckPage() {
   const beat = beats[i];
   $('#deck-title').textContent = beat.title;
   $('#deck-narrative').textContent = beat.caption || beat.narration;
+  $('#deck-source').textContent = beat.topic ? '' : (S.deckSource || '');
+  $('#story-deck').classList.toggle('topic-page', !!beat.topic);
   setDeckImage(beat.img);
   document.querySelectorAll('#deck-dots i').forEach((dot, idx) => dot.classList.toggle('on', idx === i));
-  $('#deck-phase').textContent = S.briefing ? `故事导读 ${i + 1}/${beats.length}` : `第 ${i + 1}/${beats.length} 页`;
+  $('#deck-phase').textContent = `${i + 1} / ${beats.length}`;
   $('#btn-deck-prev').disabled = i === 0;
   $('#btn-deck-next').disabled = i === beats.length - 1;
 }
@@ -581,11 +592,12 @@ function enterDebateDeck(st, meta) {
   $('#story-deck').classList.remove('briefing');
   $('#screen-table').classList.add('debating');
   // 故事各页 + 末页「当前议题」，辩论期可随时左右翻回去看
-  const pages = [...deckBeats(st, meta), {
-    title: S.escalated ? '议题升级' : st.focal,
-    narration: S.escalated ? meta.escalation.replace(/^议题升级——/, '') : meta.scene,
-    img: panelSrc(st, 2),
-  }];
+  const pages = deckBeats(st, meta);
+  if (S.escalated) {                               // 升级后改写议题页
+    const topic = pages[pages.length - 1];
+    topic.title = '议题升级';
+    topic.caption = meta.escalation.replace(/^议题升级——/, '');
+  }
   S.deckBeats = pages;
   S.deckPage = pages.length - 1;
   renderDeckDots(pages.length);
