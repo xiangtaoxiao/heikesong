@@ -891,6 +891,11 @@ def ui_review() -> FileResponse:
     return FileResponse(STATIC_DIR / "gpt2-ui-review.html")
 
 
+@router.get("/content-review")
+def content_review() -> FileResponse:
+    return FileResponse(STATIC_DIR / "content-review.html", headers={"Cache-Control": "no-store"})
+
+
 @router.get("/roster-review")
 def roster_review() -> FileResponse:
     return FileResponse(STATIC_DIR / "roster-review.html")
