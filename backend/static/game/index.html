@@ -4,9 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>孔子邀请你加入会议：快来跟古今中外圣贤开麦，选出你的哲学人格</title>
-<link rel="stylesheet" href="/static/game/game.css?v=20260811-sfx-trim">
+<link rel="stylesheet" href="/static/game/game.css?v=20260812-boot-screen">
 </head>
 <body>
+
+<!-- ═══ 加载页 ═══ -->
+<div id="boot-screen" class="boot-screen">
+  <div class="boot-title">孔子邀请你加入会议</div>
+  <div class="boot-text">正在加载游戏素材</div>
+  <div class="boot-bar"><i id="boot-fill"></i></div>
+  <div class="boot-percent" id="boot-percent">0%</div>
+</div>
 
 <!-- ═══ 开始页 ═══ -->
 <section id="screen-start" class="screen active">
@@ -45,7 +53,7 @@
 <section id="screen-table" class="screen">
   <header class="topbar">
     <div class="tb-left">
-      <span class="tb-logo">稷下 · 论语圆桌</span>
+      <span class="tb-logo">孔子邀请你加入会议</span>
       <span class="tb-story" id="tb-story"></span>
       <span class="tb-live">进行中</span>
     </div>
@@ -173,6 +181,6 @@
   </div>
 </section>
 
-<script src="/static/game/game.js?v=20260811-sfx-trim"></script>
+<script src="/static/game/game.js?v=20260812-boot-screen"></script>
 </body>
 </html>
