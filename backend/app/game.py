@@ -88,6 +88,7 @@ RELATION_INSTRUCTIONS = {
     "callback": "回收本篇前文出现过的一个具体物件、短词或小画面，赋予它新的意思，再回应眼前升级条件。让熟悉前文的人会心一笑，但不能只玩梗。",
     "direct_response": "直接回应玩家的处境、理由或犹豫，不许绕开玩家。",
     "second_response": "在回应玩家后补充另一种张力：可以支持、追问或挑战，但必须接住玩家的原话。",
+    "answer_peer": "被另一位哲学家点名提问：必须正面回答对方的具体问题，先给出自己的判断和理由；不许反问、回避或把问题抛回去。",
 }
 
 HUMOR_CUES = {
@@ -699,6 +700,8 @@ def game_turn(payload: dict) -> dict:
             if _is_refusal(content):
                 raise ValueError("upstream refusal")
             result = _validated_turn(content, persona_id, panel, user_text, escalated, speaker_history, transcript)
+            if relation == "answer_peer" and (result.get("pass") or result["speech"].rstrip().endswith(("？", "?"))):
+                raise ValueError("answer_peer must answer without ending in a question")
             log_game_latency("game_turn", persona=persona_id, story=story_id, attempt=attempt + 1, fallback=False, elapsed_ms=round((time.perf_counter() - started) * 1000))
             return result
         except Exception as exc:

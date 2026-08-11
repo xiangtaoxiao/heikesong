@@ -107,7 +107,7 @@ const S = {
   seatPreview: null,
   animTimer: null,
   prefetch: {}, chars: {},
-  lastSpeakers: [], skipTurn: false, skipStory: false, deckPage: 0, deckBeats: [],
+  lastSpeakers: [], lastPhilosopherTurn: null, skipTurn: false, skipStory: false, deckPage: 0, deckBeats: [],
   report: null, shareToken: null, shareUrl: null,
 };
 
@@ -759,6 +759,20 @@ async function circle(st, meta) {
     pos++;
   }
   if (!S.skipStory) await drainUser(st, 0);
+  // 第一轮：最后一位哲学家若点名提问了另一位，先让被点名者正面回答，避免问句戛然而止
+  if (!S.escalated && !S.aborted && !S.skipStory) await answerPeerFollowup(st);
+}
+
+function isAskingTurn(turn) {
+  return turn && (turn.move === 'question' || /[？?]\s*$/.test(turn.text || ''));
+}
+
+async function answerPeerFollowup(st) {
+  const last = S.lastPhilosopherTurn;
+  if (!last || !last.address) return;
+  if (last.address === last.id || !S.panel.includes(last.address)) return;
+  if (!isAskingTurn(last)) return;
+  await speak(last.address, st, { relation: 'answer_peer', replyTo: CAST[last.id].name });
 }
 
 // 每篇只安排两个轻喜剧节拍：第一圈第三位善意拆台，第二圈第二位回收前文梗。
@@ -828,6 +842,7 @@ async function speak(id, st, opts = {}) {
 
   pushLine(id, CAST[id].name, turn.text);
   recordRelationship(id, turn);
+  S.lastPhilosopherTurn = { id, address: turn.address || null, move: turn.move || 'build', text: turn.text };
   S.lastSpeakers.unshift(id);
   S.lastSpeakers = S.lastSpeakers.slice(0, 2);
   S.skipTurn = false;
