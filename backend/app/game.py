@@ -619,7 +619,7 @@ def _suggestion_prompt(story_id: str, phase: str, host_question: str, transcript
 
 每条必须是玩家本人会说的话，而不是旁观评论。硬性格式：每条都必须包含“我”或“咱”至少一次，但不要求放在句首；例如“先把羊还了，我再陪父亲去认错”“要我说，亲情不能替偷窃开脱”。可以对在场角色说“你”，但不能把问题抛给玩家，不能写成“你会怎么选”“该怎么做”。第三条也必须是一个选择或行动，不要写成问题。
 
-风格必须有趣、尖锐、简单易懂，像玩家在圆桌上自然插话：优先用具体细节、反问或带转折的短判断；可以有一点调侃，但不刻薄。每条 12–28 个汉字，口语化，不解释推理。
+风格必须有趣、尖锐、简单易懂，像玩家在圆桌上自然插话：优先用具体细节、反问或带转折的短判断；可以有一点调侃，但不刻薄。每条 12–20 个汉字，口语化，不解释推理。
 
 禁止使用“首先”“应该”“本质上”“从某种意义上”“我们需要”“这体现了”等说教套话；不要杜撰原文或历史事实，不评价对错。
 
@@ -635,9 +635,9 @@ def _validated_suggestions(content: str) -> list[str]:
     cleaned = []
     for item in suggestions:
         text = " ".join(str(item).split()).strip().rstrip("？?")
-        if len(text) > 34:                       # 超长的裁到自然停顿，而不是整条丢掉
-            cut = max(text.rfind(mark, 0, 35) for mark in "，,。；;！!")
-            text = text[:cut] if cut >= 14 else text[:34]
+        if len(text) > 24:                       # 超长的裁到自然停顿，而不是整条丢掉
+            cut = max(text.rfind(mark, 0, 25) for mark in "，,。；;！!")
+            text = text[:cut] if cut >= 14 else text[:24]
         if len(text) < 12 or text.startswith(PLAYER_QUESTION_OPENERS):
             continue
         if text not in cleaned:
@@ -738,18 +738,24 @@ def game_welcome() -> dict:
     """开场问候：与具体故事无关，只欢迎诸位并说明今晚要做什么。"""
     try:
         base, key, model = _api()
-        text = _chat(base, key, model, [
-            {"role": "system", "content": "只输出合法 JSON，不解释。"},
-            {"role": "user", "content": f"""你是哲学圆桌游戏《稷下·论语圆桌》的主持人，今晚请来了几位古今哲学家，还有一位旁听的年轻人（玩家）。
+        text = _post_json(f"{base}/chat/completions", key, {
+            "model": model,
+            "messages": [
+                {"role": "system", "content": "只输出合法 JSON，不解释。"},
+                {"role": "user", "content": f"""你是哲学圆桌游戏《稷下·论语圆桌》的主持人，今晚请来了几位古今哲学家，还有一位旁听的年轻人（玩家）。
 
 【本轮任务】{HOST_TASKS['welcome']}
 
 说人话，热情、干脆，像懂得及时收麦的读书会主持人。52 字以内，一到两句。必须提到“一只羊、一道门、三年时间”，可以有一点轻巧反差；不要考据，不要解释典故，不要说“标准答案”“两千年来”“值得深思”。
 
 只输出合法 JSON：{{"speech":"主持人台词"}}"""},
-        ], max_tokens=200, temperature=0.85)
-        match = re.search(r"\{.*\}", text, re.S)
-        speech = " ".join(str(json.loads(match.group(0) if match else text).get("speech") or "").split())
+            ],
+            "max_tokens": 200,
+            "temperature": 0.85,
+        })
+        content = json.loads(text)["choices"][0]["message"]["content"] or ""
+        match = re.search(r"\{.*\}", content, re.S)
+        speech = " ".join(str(json.loads(match.group(0) if match else content).get("speech") or "").split())
         if not speech or _is_refusal(speech) or len(speech) > 56:
             raise ValueError("invalid welcome")
         return {"speech": speech}
