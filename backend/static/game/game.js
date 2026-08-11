@@ -103,7 +103,7 @@ const S = {
   running: false, aborted: false, briefing: false, skipBriefing: false,
   paused: false, inputHold: false, flowWaiters: [], // 暂停/输入即停（移植）
   suggestionToken: 0,
-  audio: null, finishAudio: null, bgm: null,
+  audio: null, finishAudio: null, ambient: null, bgm: null,
   seatPreview: null,
   animTimer: null,
   prefetch: {}, chars: {},
@@ -179,8 +179,39 @@ async function boot() {
   setupMic();
   updateSpeakGate();                                 // 未开席前发言控件保持禁用
   window.addEventListener('resize', () => layoutChars(true));
+  // 环境音：先尝试自动启动，浏览器拦截时用首次交互兜底
+  const bootTrack = () => {
+    switchTrack(currentTrackId());
+    document.removeEventListener('pointerdown', bootTrack);
+    document.removeEventListener('click', bootTrack);
+    document.removeEventListener('keydown', bootTrack);
+    document.removeEventListener('touchend', bootTrack);
+  };
+  document.addEventListener('pointerdown', bootTrack);
+  document.addEventListener('click', bootTrack);
+  document.addEventListener('keydown', bootTrack);
+  document.addEventListener('touchend', bootTrack);
+  startTrack(currentTrackId());                      // 允许自动播放的浏览器首页即出声
+  loadSfx();
+  document.addEventListener('pointerdown', (e) => {  // 按下瞬间发声，不等抬起
+    const el = e.target.closest('button');
+    if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
+    const hit = sfxForButton(el);
+    if (hit) playSfx(hit[0], hit[1], 1);
+  }, true);
+  document.addEventListener('keydown', (e) => {      // 键盘 Enter/Space 触发时补一声
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const el = e.target.closest('button');
+    if (!el || el.disabled || el.getAttribute('aria-disabled') === 'true') return;
+    const hit = sfxForButton(el);
+    if (hit) playSfx(hit[0], hit[1], 1);
+  }, true);
   // 开场问候与选人无关：页面一加载就开始生成并合成语音，入席时零等待
-  S.welcomeP = fetchWelcome().then((t) => { warmTTS('host', t); return t; });
+  S.welcomeP = fetchWelcome().then((t) => {
+    warmTTS('host', t);
+    if (STORY_META && STORY_META.opening) warmTTS('host', STORY_META.opening);
+    return t;
+  });
 
   const sharedToken = new URLSearchParams(location.search).get('report');
   if (sharedToken) {
@@ -315,14 +346,21 @@ function stopSeatPreview() {
   if (!S.seatPreview) return;
   try { S.seatPreview.pause(); } catch {}
   S.seatPreview = null;
+  restoreTrack();
 }
 
 function previewSeatQuote(id) {
   if (S.audioMuted || !SEAT_QUOTES[id]) return;
   stopSeatPreview();
+  duckTrack();
   const audio = new Audio(`/static/assets/audio/seat-quotes/${id}.wav`);
   S.seatPreview = audio;
-  const finish = () => { if (S.seatPreview === audio) S.seatPreview = null; };
+  const finish = () => {
+    if (S.seatPreview === audio) {
+      S.seatPreview = null;
+      restoreTrack();
+    }
+  };
   audio.onended = finish;
   audio.onerror = finish;
   audio.play().catch(finish);
@@ -440,7 +478,7 @@ async function startGame() {
   updateSpeakGate();
   show('#screen-table');
   mountChars();
-  startBgm();
+  switchTrack('bgm');
   // 抢跑：开场白与第一篇的主持人台词，在舞台刚亮起时就开始生成/合成
   const first = STORY_META.stories.find((x) => x.id === STORIES[0].id);
   if (first && canPlayAudio()) warmHostQueue(deckBeats(STORIES[0], first).map((b) => b.narration));
@@ -457,16 +495,24 @@ async function fetchWelcome() {
 
 async function runGame() {
   const welcome = await (S.welcomeP || fetchWelcome());   // 入席时已起跑，这里通常瞬时返回
-  S.deckBeats = [{
-    title: '稷下 · 论语圆桌',
-    narration: '今晚同席：' + S.panel.map((p) => CAST[p].name).join('、') + '，以及旁听的你。今晚共 ' + STORIES.length + ' 篇公案，随时可以插话。',
-    img: null,
-  }];
+  const opening = (STORY_META && STORY_META.opening) || '';
+  S.deckBeats = [
+    {
+      title: '稷下 · 论语圆桌',
+      narration: '今晚同席：' + S.panel.map((p) => CAST[p].name).join('、') + '，以及旁听的你。今晚共 ' + STORIES.length + ' 篇公案，随时可以插话。',
+      img: null,
+    },
+    { title: '今晚聊什么', narration: opening, img: null },
+  ];
   S.deckPage = 0;
-  renderDeckDots(1);
+  renderDeckDots(S.deckBeats.length);
   renderDeckPage();
   $('#deck-source').textContent = '';
   await hostSay(welcome);
+  if (opening) {
+    showDeckSlide(S.deckBeats, 1);
+    await hostSay(opening);
+  }
 
   for (S.storyIdx = 0; S.storyIdx < STORIES.length && !S.aborted; S.storyIdx++) {
     const st = STORIES[S.storyIdx];
@@ -565,11 +611,13 @@ function setTheater(st, meta) {
 }
 
 async function showStoryTransition(nextStory) {
+  const curMeta = STORY_META && STORY_META.stories.find((x) => x.id === STORIES[S.storyIdx].id);
+  const transition = (curMeta && curMeta.transition_out) || '稍作停顿，让刚才的分歧落定；下一段《论语》正在展开。';
   $('#deck-phase').textContent = '篇章过渡';
   $('#deck-status').textContent = `下一篇 · ${nextStory.source}`;
   $('#deck-title').textContent = `接下来：${nextStory.title}`;
-  $('#deck-narrative').textContent = '稍作停顿，让刚才的分歧落定；下一段《论语》正在展开。';
-  await sleep(1400);
+  $('#deck-narrative').textContent = transition;
+  await hostSay(transition);
 }
 
 async function runStoryBriefing(st, meta) {
@@ -916,12 +964,12 @@ function playAudio(blob) {
       if (S.audio === a) S.audio = null;
       if (S.finishAudio === finish) S.finishAudio = null;
       URL.revokeObjectURL(url);
-      restoreBgm();
+      restoreTrack();
       resolve();
     };
     S.audio = a;
     S.finishAudio = finish;
-    duckBgm();
+    duckTrack();
     a.onended = a.onerror = finish;
     a.play().catch(finish);
   });
@@ -935,8 +983,12 @@ function stopCurrentAudio() {
 function toggleMute() {
   S.audioMuted = !S.audioMuted;
   if (S.audioMuted) stopSeatPreview();
-  if (S.audioMuted) { stopCurrentAudio(); stopBgm(); }
-  else startBgm();
+  if (S.audioMuted) {
+    stopCurrentAudio();
+    Object.keys(TRACKS).forEach((id) => stopTrack(id));
+  } else {
+    switchTrack(currentTrackId());
+  }
   const btn = $('#btn-mute');
   btn.querySelector('.control-signet').textContent = S.audioMuted ? '静音' : '声音';
   const muteLabel = btn.querySelector('.control-label');
@@ -945,19 +997,90 @@ function toggleMute() {
   btn.title = S.audioMuted ? '开启声音' : '关闭声音';
 }
 
-// ── BGM（移植）：园林底噪，念白时自动闪避 ──
-function startBgm() {
-  if (S.audioMuted) return;
-  if (!S.bgm) {
-    S.bgm = new Audio('/static/assets/audio/analects-calm-bgm.wav');
-    S.bgm.loop = true;
-  }
-  S.bgm.volume = 0.09;
-  S.bgm.play().catch(() => {});
+// ── 音轨：会前环境音（水流鸟鸣） + 游戏音乐，念白时自动闪避 ──
+const TRACKS = {
+  ambient: { src: '/static/assets/audio/analects-calm-ambient.wav?v=20260811-home-audio-fix', volume: 0.12, duck: 0.04 },
+  bgm:     { src: '/static/assets/audio/analects-calm-bgm.wav',     volume: 0.09, duck: 0.03 },
+};
+function currentTrackId() {
+  return $('#screen-table').classList.contains('active') ? 'bgm' : 'ambient';
 }
-function duckBgm() { if (S.bgm && !S.bgm.paused) S.bgm.volume = 0.03; }
-function restoreBgm() { if (S.bgm && !S.bgm.paused && !S.paused) S.bgm.volume = 0.09; }
-function stopBgm() { if (S.bgm) S.bgm.pause(); }
+function startTrack(id) {
+  if (S.audioMuted) return;
+  if (S[id]) { try { S[id].pause(); } catch {} }   // 重建实例，避免被浏览器自动播放策略锁住
+  S[id] = new Audio(TRACKS[id].src);
+  S[id].loop = true;
+  S[id].volume = TRACKS[id].volume;
+  S[id].play().catch(() => {});
+}
+function stopTrack(id) { if (S[id]) S[id].pause(); }
+function switchTrack(id) {
+  Object.keys(TRACKS).forEach((key) => { if (key !== id) stopTrack(key); });
+  startTrack(id);
+}
+function duckTrack() {
+  const id = currentTrackId();
+  if (S[id] && !S[id].paused) S[id].volume = TRACKS[id].duck;
+}
+function restoreTrack() {
+  const id = currentTrackId();
+  if (S[id] && !S[id].paused && !S.paused) S[id].volume = TRACKS[id].volume;
+}
+
+// ── 按钮点击音：重要操作厚重，普通操作轻快 ──
+const SFX_FILES = {
+  light: '/static/assets/audio/ui/sfx-click-light.wav?v=20260811-sfx-trim',
+  heavy: '/static/assets/audio/ui/sfx-click-heavy.wav?v=20260811-sfx-trim',
+  share: '/static/assets/audio/ui/sfx-click-share.wav?v=20260811-sfx-trim',
+  quick: '/static/assets/audio/ui/sfx-click-quick.wav?v=20260811-sfx-trim',
+};
+const SFX_BUFFERS = {};
+let sfxCtx = null;
+
+function sfxContext() {
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  if (!sfxCtx) sfxCtx = new AC();
+  if (sfxCtx.state === 'suspended') sfxCtx.resume().catch(() => {});
+  return sfxCtx;
+}
+async function loadSfx() {
+  const ctx = sfxContext();
+  if (!ctx) return;
+  await Promise.all(Object.entries(SFX_FILES).map(async ([key, url]) => {
+    try {
+      const r = await fetch(url);
+      SFX_BUFFERS[key] = await ctx.decodeAudioData(await r.arrayBuffer());
+    } catch {}
+  }));
+}
+function playSfx(key, rate = 1, gain = 1) {
+  const ctx = sfxContext();
+  const buf = SFX_BUFFERS[key];
+  if (!ctx || !buf) return;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = rate;
+  const amp = ctx.createGain();
+  amp.gain.value = gain;
+  src.connect(amp).connect(ctx.destination);
+  src.start();
+}
+function sfxForButton(el) {
+  const id = el.id || '';
+  if (['btn-to-select', 'btn-start-game', 'btn-send', 'btn-speak-open', 'btn-restart-game'].includes(id)) return ['heavy', 0.85];
+  if (['btn-share-report', 'btn-save-report'].includes(id)) return ['share', 1];
+  if (id === 'btn-leave') return ['heavy', 0.7];
+  if (id === 'btn-interrupt') return ['quick', 1.1];
+  if (['btn-deck-next', 'btn-skip-brief', 'btn-skip-cue', 'btn-skip-turn', 'btn-skip-story'].includes(id)) return ['quick', 1.15];
+  if (['btn-deck-prev', 'btn-speech-close', 'btn-drawer-close', 'btn-image-close', 'btn-orig-close'].includes(id)) return ['quick', 0.9];
+  if (id === 'btn-mute') return ['quick', el.classList.contains('muted') ? 1.2 : 0.8];
+  if (id === 'btn-pause') return ['quick', el.classList.contains('paused') ? 1.2 : 0.8];
+  if (id === 'btn-mic') return ['quick', el.classList.contains('rec') ? 0.8 : 1.2];
+  if (['btn-original', 'btn-original-deck', 'btn-log'].includes(id)) return ['light', 1];
+  if (el.classList.contains('suggestion')) return ['light', 1];
+  return null;
+}
 
 function readTime(text) { return Math.max(2200, text.length * 145); }
 
@@ -1103,11 +1226,12 @@ function togglePause(force) {
   $('#screen-table').classList.toggle('game-paused', S.paused);
   if (S.paused) {
     if (S.audio && !S.audio.paused) S.audio.pause();
-    if (S.bgm && !S.bgm.paused) S.bgm.volume = 0.03;
+    const id = currentTrackId();
+    if (S[id] && !S[id].paused) S[id].volume = TRACKS[id].duck;
     return;
   }
   if (S.audio?.paused) S.audio.play().catch(() => {});
-  restoreBgm();
+  restoreTrack();
   S.flowWaiters.splice(0).forEach((r) => r());
 }
 
@@ -1355,7 +1479,7 @@ async function endMeeting() {
   updateSpeakGate();
   $('#screen-table').classList.remove('debating');
   stopCurrentAudio();
-  stopBgm();
+  switchTrack('ambient');
   S.flowWaiters.splice(0).forEach((r) => r());
   showReport();
 }
@@ -1363,7 +1487,7 @@ async function endMeeting() {
 async function showReport() {
   S.running = false;
   updateSpeakGate();
-  stopBgm();
+  switchTrack('ambient');
   show('#screen-report');
   const wrap = $('#report-wrap');
   wrap.innerHTML = '<p class="report-loading">主持人正在为你写终局报告…</p>';
@@ -1521,6 +1645,14 @@ function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines) {
   return y + lines * lineHeight;
 }
 
+function fitText(ctx, text, maxWidth) {
+  let t = String(text || '');
+  const ellipsis = '…';
+  if (ctx.measureText(t).width <= maxWidth) return t;
+  while (t.length > 1 && ctx.measureText(t + ellipsis).width > maxWidth) t = t.slice(0, -1);
+  return t + ellipsis;
+}
+
 async function saveReportPoster() {
   try {
     const token = await ensureShare();
@@ -1537,10 +1669,29 @@ async function saveReportPoster() {
     ctx.drawImage(sprite, 0, 0, frameW, frameH, 270, 335, 150, 167);
     ctx.fillStyle = CAST[role].color; ctx.font = 'bold 38px serif'; ctx.fillText(S.report.match, 465, 390);
     ctx.save(); ctx.translate(465, 425); ctx.rotate(-2 * Math.PI / 180);
-    ctx.strokeStyle = '#8b4d2d'; ctx.lineWidth = 3; ctx.strokeRect(0, 0, 300, 58);
-    ctx.fillStyle = '#8b4d2d'; ctx.font = 'bold 28px serif'; ctx.fillText(S.report.title || '', 15, 39, 270); ctx.restore();
+    const tagText = S.report.title || '';
+    ctx.font = 'bold 28px serif';
+    const tagWidth = Math.max(120, Math.ceil(ctx.measureText(tagText).width) + 60);
+    ctx.strokeStyle = '#8b4d2d'; ctx.lineWidth = 3;
+    if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(0, 0, tagWidth, 58, 12); ctx.stroke(); }
+    else ctx.strokeRect(0, 0, tagWidth, 58);
+    ctx.fillStyle = '#8b4d2d'; ctx.textAlign = 'center'; ctx.fillText(fitText(ctx, tagText, tagWidth - 40), tagWidth / 2, 39); ctx.textAlign = 'left'; ctx.restore();
     let y = 550; ctx.fillStyle = '#3f3425'; ctx.font = 'bold 25px serif'; ctx.fillText('你的思考坐标', 240, y); y += 42;
-    (S.report.axes || []).forEach((axis) => { ctx.fillStyle = '#6b5c40'; ctx.font = '20px serif'; ctx.fillText(`${axis.left}  ·  ${axis.name}  ·  ${axis.right}`, 240, y); y += 15; ctx.fillStyle = '#d5c9ad'; ctx.fillRect(240, y, 600, 10); ctx.fillStyle = '#3d5940'; ctx.beginPath(); ctx.arc(240 + 600 * (axis.value / 100), y + 5, 10, 0, Math.PI * 2); ctx.fill(); y += 47; });
+    (S.report.axes || []).forEach((axis) => {
+      ctx.fillStyle = '#6b5c40'; ctx.font = '20px serif';
+      ctx.textAlign = 'left'; ctx.fillText(fitText(ctx, axis.left, 190), 240, y);
+      ctx.textAlign = 'center'; ctx.fillText(fitText(ctx, axis.name, 200), 540, y);
+      ctx.textAlign = 'right'; ctx.fillText(fitText(ctx, axis.right, 190), 840, y);
+      ctx.textAlign = 'left';
+      y += 15;
+      ctx.fillStyle = '#d5c9ad'; ctx.fillRect(240, y, 600, 10);
+      ctx.fillStyle = '#3d5940'; ctx.beginPath(); ctx.arc(240 + 600 * (axis.value / 100), y + 5, 10, 0, Math.PI * 2); ctx.fill();
+      y += 47;
+    });
+    y += 12;
+    ctx.strokeStyle = 'rgba(130, 99, 51, .25)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(240, y); ctx.lineTo(840, y); ctx.stroke();
+    y += 20;
     ctx.fillStyle = '#3f3425'; ctx.font = 'bold 25px serif'; ctx.fillText('主持人评语', 240, y); y += 36; ctx.font = '21px serif'; y = drawWrappedText(ctx, S.report.text, 240, y, 600, 34, 5) + 20;
     ctx.fillStyle = '#6b5c40'; ctx.font = '18px serif'; y = drawWrappedText(ctx, S.report.quote, 240, y, 600, 28, 2) + 18;
     ctx.save(); ctx.shadowColor = 'rgba(75, 52, 29, .22)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 6;
