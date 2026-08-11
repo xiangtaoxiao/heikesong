@@ -1111,6 +1111,8 @@ async function typewriterWait(text) {
 }
 
 // ═══ 主持人（台词落在卷轴下沿的讲述栏）═══
+const HOST_LINE_PAUSE = 700;                     // 主持人句间留白，听感更自然
+
 async function hostSay(text, opts = {}) {
   if (S.aborted) return;
   await waitForFlow();
@@ -1137,6 +1139,7 @@ async function hostSay(text, opts = {}) {
     S.hostSpeaking = false;
     updateSpeakGate();
   }
+  await sleep(HOST_LINE_PAUSE);
   $('#deck-narration').classList.remove('speaking');
   if (!S.briefing) $('#deck-status').textContent = S.escalated ? '议题升级' : '辩论进行中';
 }
