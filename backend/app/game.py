@@ -742,7 +742,7 @@ def game_welcome() -> dict:
             "model": model,
             "messages": [
                 {"role": "system", "content": "只输出合法 JSON，不解释。"},
-                {"role": "user", "content": f"""你是哲学圆桌游戏《稷下·论语圆桌》的主持人，今晚请来了几位古今哲学家，还有一位旁听的年轻人（玩家）。
+                {"role": "user", "content": f"""你是哲学圆桌游戏《孔子邀请你加入会议》的主持人，今晚请来了几位古今哲学家，还有一位旁听的年轻人（玩家）。
 
 【本轮任务】{HOST_TASKS['welcome']}
 

@@ -1,4 +1,4 @@
-// ═══ 稷下·论语圆桌 — 共享讲席 成品版 ═══
+// ═══ 孔子邀请你加入会议 — 共享讲席 成品版 ═══
 // · 布局：上方竹卷轴讲席（导读PPT/议题投屏），下方哲学家并席而坐
 // · 流程：故事导读(人物静止) → 主持人开席 → 轮流辩论(发言者动画/其余聆听)
 //        → cue 玩家 → 议题升级 → 第二圈 → 三案毕出哲学画像
@@ -112,7 +112,55 @@ const S = {
 };
 
 // ═══ 启动 ═══
+const PRELOAD_ASSETS = [
+  '/static/assets/ui/start-bg-scroll-user.png',
+  '/static/assets/design-v2/kongzi-casual-v2.png',
+  '/static/assets/design-v2/hanfeizi-casual-v1.png',
+  '/static/assets/design-v2/kant-casual-v2.png',
+  '/static/assets/design-v2/player-casual-v2.png',
+  '/static/assets/ui/paper-tile.png',
+  ...Object.keys(CAST).filter((id) => id !== 'player').map((id) => SPRITE(id)),
+  '/static/assets/theater/s1-1.png',
+  '/static/assets/theater/s1-2.png',
+  '/static/assets/theater/s1-3.png',
+  '/static/assets/audio/analects-calm-bgm.wav',
+  '/static/assets/audio/analects-calm-ambient.wav',
+  ...Object.keys(SEAT_QUOTES).map((id) => `/static/assets/audio/seat-quotes/${id}.wav`),
+  '/static/assets/ui/stage-bg-a.png',
+  '/static/assets/ui/gpt2/stage-garden.png',
+  '/static/assets/ui/gpt2/input-tray.png',
+  '/static/assets/ui/gpt2/scroll-frame.png',
+];
+
+async function preloadGameAssets() {
+  const items = [...new Set(PRELOAD_ASSETS)];
+  const total = items.length;
+  let done = 0;
+  const tick = () => {
+    done++;
+    const pct = Math.round((done / total) * 100);
+    const fill = $('#boot-fill');
+    if (fill) fill.style.width = pct + '%';
+    const pc = $('#boot-percent');
+    if (pc) pc.textContent = pct + '%';
+  };
+  await Promise.all(items.map((url) => new Promise((resolve) => {
+    const finish = () => { tick(); resolve(); };
+    if (/\.(png|jpe?g|gif|webp)$/i.test(url)) {
+      const img = new Image();
+      img.onload = finish;
+      img.onerror = finish;
+      img.src = url;
+    } else {
+      fetch(url).then(finish).catch(finish);
+    }
+  })));
+}
+
 async function boot() {
+  await Promise.race([preloadGameAssets(), new Promise((r) => setTimeout(r, 20000))]);
+  const bootEl = $('#boot-screen');
+  if (bootEl) { bootEl.classList.add('done'); setTimeout(() => bootEl.remove(), 500); }
   try {
     const r = await fetch('/api/game/stories');
     STORY_META = await r.json();
@@ -313,6 +361,7 @@ function openSpeechTray(open = true, focus = true) {
 
 // ═══ 选人 ═══
 function renderPick() {
+  [0, 1, 2].forEach((i) => { new Image().src = panelSrc(STORIES[0], i); });   // 入席页预载第一篇三格图
   const grid = $('#pick-grid');
   grid.innerHTML = '';
   const picked = new Set(['kongzi']);
@@ -498,7 +547,7 @@ async function runGame() {
   const opening = (STORY_META && STORY_META.opening) || '';
   S.deckBeats = [
     {
-      title: '稷下 · 论语圆桌',
+      title: '孔子邀请你加入会议',
       narration: '今晚同席：' + S.panel.map((p) => CAST[p].name).join('、') + '，以及旁听的你。今晚共 ' + STORIES.length + ' 篇公案，随时可以插话。',
       img: null,
     },
@@ -1135,11 +1184,11 @@ async function hostSay(text, opts = {}) {
     } else {
       await sleep(readTime(text) * 0.8);
     }
-  } finally {                                    // 播放出错也必须把闸门放开，否则整局都发不了言
+  } finally {                                    // 句间留白后再放闸门，停顿期间保持"主持人说话中"
+    await sleep(HOST_LINE_PAUSE);
     S.hostSpeaking = false;
     updateSpeakGate();
   }
-  await sleep(HOST_LINE_PAUSE);
   $('#deck-narration').classList.remove('speaking');
   if (!S.briefing) $('#deck-status').textContent = S.escalated ? '议题升级' : '辩论进行中';
 }
@@ -1312,6 +1361,7 @@ function setupMic() {
   const rec = new SR();
   rec.lang = 'zh-CN'; rec.interimResults = true; rec.continuous = true;   // 停顿不结束
   let settled = '';                                  // 已定稿文本；中间结果只作预览，不覆盖
+  let lastInterim = '';                              // 最近一次中间结果，停录时兜底写入
   let live = false;                                  // 识别结果是否还该写进输入框
   let finalUpto = 0;                                 // 本次识别会话已吃进 settled 的定稿条数，防重复累加
   let timer = null, elapsed = 0;
@@ -1346,6 +1396,11 @@ function setupMic() {
     live = keep;
     paint(false);
     clearInterval(timer);
+    if (keep && lastInterim && !settled.endsWith(lastInterim)) {
+      settled += lastInterim;
+      inp.value = settled;
+    }
+    lastInterim = '';
     try { rec.stop(); } catch {}
     if (keep) inp.focus();                           // 停下来先给玩家改词的机会，发不发由他定
   };
@@ -1362,11 +1417,17 @@ function setupMic() {
       settled += r[0].transcript;
       finalUpto = i + 1;
     }
+    lastInterim = interim;
     inp.value = settled + interim;
     holdFlowForInput();
   };
   // 浏览器仍会因静音自行结束；只要玩家还没点「结束」，就无声续录
-  rec.onend = () => { if (S.recording) { try { rec.start(); } catch { paint(false); clearInterval(timer); } } };
+  rec.onend = () => {
+    if (!S.recording) return;
+    if (lastInterim && !settled.endsWith(lastInterim)) { settled += lastInterim; }
+    lastInterim = '';
+    try { rec.start(); } catch { paint(false); clearInterval(timer); }
+  };
   rec.onerror = (e) => {
     if (e.error === 'no-speech' || e.error === 'aborted') return;         // 交给 onend 续录
     paint(false);

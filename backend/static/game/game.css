@@ -1,4 +1,4 @@
-/* ═══ 稷下·论语圆桌 — 共享讲席 成品版 ═══
+/* ═══ 孔子邀请你加入会议 — 共享讲席 成品版 ═══
    视觉语言：竹卷轴讲席（GPT-Image-2 素材）+ 水墨壁画舞台 + 木牌/印章控件 */
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -18,6 +18,19 @@
 
 html, body { height: 100%; }
 body { background: var(--cream); color: var(--ink); font-family: var(--serif); overflow: hidden; }
+
+/* ═══ 加载页 ═══ */
+.boot-screen { position: fixed; inset: 0; z-index: 100; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 18px; background: #17130f; color: #f4ead6;
+  font-family: var(--start-font); transition: opacity .45s ease; }
+.boot-screen.done { opacity: 0; pointer-events: none; }
+.boot-title { font-size: 30px; letter-spacing: 8px; }
+.boot-text { font-size: 13px; letter-spacing: 2px; color: rgba(244,234,214,.75); }
+.boot-bar { width: min(420px, 70vw); height: 6px; border-radius: 3px;
+  background: rgba(244,234,214,.18); overflow: hidden; }
+.boot-bar i { display: block; height: 100%; width: 0; background: #c9a86a;
+  border-radius: 3px; transition: width .3s ease; }
+.boot-percent { font-size: 12px; letter-spacing: 1px; color: rgba(244,234,214,.6); }
 b { color: var(--sage-deep); }
 button { font-family: var(--serif); cursor: pointer; }
 
@@ -102,7 +115,7 @@ button { font-family: var(--serif); cursor: pointer; }
 
 /* ═══ 选人 ═══ */
 #screen-select { align-items: center; justify-content: center;
-  background: url('/static/assets/ui/paper-tile.png') center / 512px, var(--cream); }
+  background: url('/static/assets/ui/select-bg-ink.jpg') center / cover no-repeat, var(--cream); }
 .select-wrap { text-align: center; width: min(1080px, 94vw); }
 .select-wrap h2 { font-size: 28px; letter-spacing: 10px; margin-bottom: 6px; }
 .select-hint { font-size: 13px; letter-spacing: 1px; color: var(--ink-dim); }
@@ -482,7 +495,8 @@ button { font-family: var(--serif); cursor: pointer; }
 
 .deck-visual { position: relative; min-width: 0; min-height: 0; overflow: hidden;
   border: 1px solid rgba(120,100,60,.5); outline: 1px solid rgba(120,100,60,.25); outline-offset: 3px;
-  border-radius: 2px; cursor: zoom-in; align-self: stretch; }
+  border-radius: 2px; cursor: zoom-in; align-self: stretch;
+  background: url('/static/assets/ui/paper-tile.png') center / 300px, rgba(244,237,222,.85); }
 /* 图片绝对定位：容器高度只由栅格行决定，图片再大也压不到下面的翻页条 */
 .deck-visual img { position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: contain; display: block; transition: opacity .25s ease; }
