@@ -35,7 +35,7 @@ STATIC_DIR = ROOT / "static"
 FALLBACK_CHAT_MODEL = "claude-haiku-4-5-20251001"
 SKILL_IDS = {"kongzi": "confucius"}
 VOICE_IDS = {"host": "moderator", "kongzi": "confucius"}
-HOST_TTS_SPEED = 0.92
+HOST_TTS_SPEED = 0.86
 GAME_RULES_PATH = GAME_DIR / "RULES.md"
 SOCIAL_MOVES = {"build", "challenge", "ally", "tease", "question", "pass"}
 FIRST_PERSON_MARKERS = ("我", "咱", "要我说", "轮到我", "落在我身上")
@@ -109,7 +109,8 @@ def _load(name: str) -> dict:
 
 
 PERSONAS = _load("personas.json")
-STORIES = {s["id"]: s for s in _load("stories.json")["stories"]}
+GAME_COPY = _load("stories.json")
+STORIES = {s["id"]: s for s in GAME_COPY["stories"]}
 VOICE_CONFIG = _load("voice_config.json")
 
 
@@ -199,7 +200,7 @@ def _get_json(url: str, key: str, timeout: int = 15) -> bytes:
 @router.get("/api/game/stories")
 def game_stories() -> dict:
     """Expose reviewed story copy for the static game client."""
-    return {"stories": list(STORIES.values())}
+    return {"opening": GAME_COPY.get("opening", ""), "stories": list(STORIES.values())}
 
 _SKILL_CACHE: dict[str, str] = {}
 # SKILL.md 前部多是 frontmatter 与资料路由说明，对生成台词没有帮助却占满输入窗口。
